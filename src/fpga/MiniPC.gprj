@@ -1,0 +1,26 @@
+<?xml version="1" encoding="UTF-8"?>
+<!DOCTYPE gowin-fpga-project>
+<Project>
+    <Template>FPGA</Template>
+    <Version>5</Version>
+    <Device name="GW2A-18C" pn="GW2A-LV18PG256C8/I7">gw2a18c-011</Device>
+    <FileList>
+        <File path="src/countdown_timer.v" type="file.verilog" enable="1"/>
+        <File path="src/force_rebuild.v" type="file.verilog" enable="1"/>
+        <File path="src/picorv32.v" type="file.verilog" enable="1"/>
+        <File path="src/ps2.v" type="file.verilog" enable="1"/>
+        <File path="src/psram.v" type="file.verilog" enable="1"/>
+        <File path="src/reset.v" type="file.verilog" enable="1"/>
+        <File path="src/simpleuart.v" type="file.verilog" enable="1"/>
+        <File path="src/sram.v" type="file.verilog" enable="1"/>
+        <File path="src/sram8bit.v" type="file.verilog" enable="1"/>
+        <File path="src/tang_nano_9k_leds.v" type="file.verilog" enable="1"/>
+        <File path="src/top.v" type="file.verilog" enable="1"/>
+        <File path="src/uart_wrap.v" type="file.verilog" enable="1"/>
+        <File path="src/ws2812b.v" type="file.verilog" enable="1"/>
+        <File path="src/ws2812b_tgt.v" type="file.verilog" enable="1"/>
+        <File path="src/picorv32.cst" type="file.cst" enable="0"/>
+        <File path="src/primer20k.cst" type="file.cst" enable="1"/>
+        <File path="src/picorv32.sdc" type="file.sdc" enable="0"/>
+    </FileList>
+</Project>
