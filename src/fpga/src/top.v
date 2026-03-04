@@ -100,6 +100,9 @@ module top (
    wire                       uart_ready;
    wire                       ws2812b_sel;
    wire                       ws2812b_ready;
+   wire                       dsp_sel;
+   wire                       dsp_ready;
+   wire [31:0]                dsp_data_o;
    wire                       psram_sel;
    reg                        psram_chip_present;
 
@@ -119,26 +122,40 @@ module top (
   wire[31:0] PSRAM_BASE   = 32'h4000_0000;
   wire[31:0] PSRAM_SIZE   = 32'h0080_0000;  // 8MB
 
+  wire[31:0] DSP_BASE     = 32'h5000_0000;
+  wire[31:0] DSP_SIZE     = 32'h0000_0800;
+
    // Establish memory map for all slaves:
    //      SRAM 00000000 - 0001ffff
    //      LED  80000000
    //      UART 80000008 - 8000000f
    //      CDT  80000010 - 80000014
    //   WS2812B 80000020 - 80000024
+   //      DSP  50000000 - 500007ff  (2K display BRAM)
    assign sram_sel = mem_valid && (mem_addr < MEMBYTES);
    assign leds_sel = mem_valid && (mem_addr == 32'h80000000);
    assign uart_sel = mem_valid && ((mem_addr & 32'hfffffff8) == 32'h80000008);
    assign cdt_sel = mem_valid && (mem_addr == 32'h80000010);
    assign ws2812b_sel = mem_valid && (mem_addr == 32'h80000020);
+   assign dsp_sel = mem_valid && (mem_addr >= DSP_BASE) && (mem_addr < (DSP_BASE + DSP_SIZE));
    assign psram_sel = mem_valid && (mem_addr >= PSRAM_BASE) && (mem_addr < (PSRAM_BASE + PSRAM_SIZE));
     
-   // Core can proceed regardless of *which* slave was targetted and is now ready.
-   assign mem_ready = (mem_valid & (psram_ready | sram_ready | leds_ready | uart_ready | cdt_ready | ws2812b_ready));
+  // Core can proceed when the selected slave is ready.
+  assign mem_ready = mem_valid & (
+               (psram_sel   & psram_ready) |
+               (sram_sel    & sram_ready)  |
+               (leds_sel    & leds_ready)  |
+               (uart_sel    & uart_ready)  |
+               (cdt_sel     & cdt_ready)   |
+               (ws2812b_sel & ws2812b_ready) |
+               (dsp_sel     & dsp_ready)
+              );
 
 
    // Select which slave's output data is to be fed to core.
    assign mem_rdata = psram_sel   ? psram_rdata :
                       sram_sel    ? sram_data_o :
+                      dsp_sel     ? dsp_data_o  :
                       leds_sel    ? leds_data_o :
                       uart_sel    ? uart_data_o :
                       cdt_sel     ? cdt_data_o  : 32'h0;
@@ -174,6 +191,18 @@ end
       .reset_n(reset_n)
       );
 
+   display dsp
+     (
+      .clk(clk),
+      .rst(~reset_n),
+      .mem_valid(dsp_sel),
+      .mem_addr(mem_addr - DSP_BASE),  // Address within the display's address space
+      .mem_wdata(mem_wdata),
+      .mem_wstrb(mem_wstrb),
+      .mem_ready(dsp_ready),
+      .mem_rdata(dsp_data_o)
+      );
+  
    uart_wrap uart
      (
       .clk(clk),

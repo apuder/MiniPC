@@ -70,6 +70,17 @@ int mem_test (void)
   uart_puts("peek(0x40000000): ");
   uart_print_hex((unsigned int) *mem);
   uart_puts("\r\n\r\n");
+  
+#if 1
+  uart_puts("Testing display memory: ");
+  b = (unsigned char*) 0x50000000;
+  for (int i = 0; i < 27; i++) *(b + i) = i + 65;
+  for (int i = 0; i < 27; i++) {
+    uart_print_hex(*(b + i));
+    uart_puts(" ");
+  }
+  uart_puts("\r\n");
+#endif
   //return 0;
 #endif
 #if 1
@@ -245,7 +256,7 @@ int main()
   uart_print_hex(CLK_FREQ);
   uart_puts("\r\n\r\n");
 
-  mem_test();
+  //mem_test();
 
   while (1) {
     uart_puts("Enter command:\r\n");
