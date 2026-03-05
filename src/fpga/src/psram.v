@@ -25,7 +25,7 @@
 
 module aps6404l_picorv32 #
 (
-    parameter int unsigned SYS_HZ       = 27_000_000,
+    parameter int unsigned SYS_HZ       = 84_000_000,
     parameter int unsigned SCLK_HZ      = 4_500_000,
     parameter int unsigned RD_WAIT_CLKS = 6,              // dummy "quad-nibble" cycles after addr for 0xEB
     parameter logic [31:0] PSRAM_BASE   = 32'h4000_0000,

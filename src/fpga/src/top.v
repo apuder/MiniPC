@@ -31,7 +31,7 @@ In this SoC, slave (target) device has signals:
 //`define USE_LA
 
 module top (
-            input wire        clk,
+            input wire        clk_in,
             input wire        reset_button_n,
             input wire        uart_rx,
             output wire       uart_tx,
@@ -41,6 +41,12 @@ module top (
             output logic        ps_ce_n,
             output logic        ps_sclk,
             inout  wire  [3:0]  ps_sio,
+
+            // HDMI
+            output [2:0] HDMI_TX_P,
+            output [2:0] HDMI_TX_N,
+            output HDMI_TXC_P,
+            output HDMI_TXC_N,
 
 `ifdef USE_LA
             output wire       clk_out,
@@ -119,6 +125,98 @@ module top (
    assign b00 = mem_rdata[0];
 `endif
 
+wire clk;
+
+Gowin_rPLL clk_wiz_0(
+   .clkout(clk),  // output 84 MHz
+   .clkin(clk_in) // input 27 MHz
+);
+
+//-----HDMI------------------------------------------------------------------------
+
+wire vga_vid;
+
+logic [23:0] rgb_screen_color = 24'hFFFFFF;
+
+
+logic [8:0] audio_cnt;
+logic clk_audio;
+
+always @(posedge clk_in) audio_cnt <= (audio_cnt == 9'd280) ? 9'd0 : audio_cnt + 9'd1;
+always @(posedge clk_in) if (audio_cnt == 9'd0) clk_audio <= ~clk_audio;
+
+logic [15:0] audio_sample_word [1:0] = '{16'd0, 16'd0};
+
+
+wire clk_pixel;
+wire clk_pixel_x5;
+
+// 125.875 MHz (126 MHz actual)
+Gowin_rPLL0 pll0(
+  .clkout(clk_pixel_x5), //output
+  .clkin(clk_in) //input
+);
+
+// 25.175 MHz (25.2 MHz actual)
+Gowin_CLKDIV0 clkdiv0(
+  .clkout(clk_pixel), //output
+  .hclkin(clk_pixel_x5), //input
+  .resetn(1'b1) //input
+);
+
+reg [23:0] rgb = 24'h0;
+wire vga3_vid;
+
+always @(posedge clk_pixel)
+begin
+  rgb <= vga_vid ? rgb_screen_color : 24'h0;
+end
+
+logic [9:0] cx, frame_width, screen_width;
+logic [9:0] cy, frame_height, screen_height;
+wire [2:0] tmds_x;
+wire tmds_clock_x;
+
+// 640x480 @ 60Hz
+hdmi #(.VIDEO_ID_CODE(1), .VIDEO_REFRESH_RATE(60), .AUDIO_RATE(48000), .AUDIO_BIT_WIDTH(16)) hdmi(
+  .clk_pixel_x5(clk_pixel_x5),
+  .clk_pixel(clk_pixel),
+  .clk_audio(clk_audio),
+  .reset(1'b0),
+  .rgb(rgb),
+  .audio_sample_word(audio_sample_word),
+  .tmds(tmds_x),
+  .tmds_clock(tmds_clock_x),
+  .cx(cx),
+  .cy(cy),
+  .frame_width(frame_width),
+  .frame_height(frame_height),
+  .screen_width(screen_width),
+  .screen_height(screen_height)
+);
+
+TLVDS_OBUF tmds [2:0] (
+  .O(HDMI_TX_P),
+  .OB(HDMI_TX_N),
+  .I(tmds_x)
+);
+
+TLVDS_OBUF tmds_clock(
+  .O(HDMI_TXC_P),
+  .OB(HDMI_TXC_N),
+  .I(tmds_clock_x)
+);
+
+reg sync;
+
+
+always @(posedge clk_pixel)
+begin
+  sync <= (cx == frame_width - 8) && (cy == frame_height - 1);
+end
+
+
+
   wire[31:0] PSRAM_BASE   = 32'h4000_0000;
   wire[31:0] PSRAM_SIZE   = 32'h0080_0000;  // 8MB
 
@@ -195,6 +293,9 @@ end
      (
       .clk(clk),
       .rst(~reset_n),
+      .vga_clk(clk_pixel),
+      .pixel_data(vga_vid),
+      .genlock(sync),
       .mem_valid(dsp_sel),
       .mem_addr(mem_addr - DSP_BASE),  // Address within the display's address space
       .mem_wdata(mem_wdata),

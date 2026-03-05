@@ -24,7 +24,7 @@ SRAM_ADDR_WIDTH = 12
 
 # This tells both software and Verilog the clock speed.  Change it
 # here only.
-CLK_FREQ = 27000000
+CLK_FREQ = 84000000
 
 COMMONFLAGS = -march=rv32i2p0 -mabi=ilp32
 CFLAGS = -mno-save-restore $(COMMONFLAGS) -nostartfiles -nostdlib -static -O1
