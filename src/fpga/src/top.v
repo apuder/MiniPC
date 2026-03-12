@@ -48,6 +48,11 @@ module top (
             output HDMI_TXC_P,
             output HDMI_TXC_N,
 
+            input CS_FPGA,
+            input SCK,
+            input MOSI,
+            output MISO,
+
 `ifdef USE_LA
             output wire       clk_out,
             output wire       mem_instr, 
@@ -109,6 +114,9 @@ module top (
    wire                       dsp_sel;
    wire                       dsp_ready;
    wire [31:0]                dsp_data_o;
+   wire                       spi_sel;
+   wire                       spi_ready;
+   wire [31:0]                spi_data_o;
    wire                       psram_sel;
    reg                        psram_chip_present;
 
@@ -223,6 +231,9 @@ end
   wire[31:0] DSP_BASE     = 32'h5000_0000;
   wire[31:0] DSP_SIZE     = 32'h0000_0800;
 
+  wire[31:0] SPI_BASE     = 32'h8000_1000;
+  wire[31:0] SPI_SIZE     = 32'h0000_0200;
+
    // Establish memory map for all slaves:
    //      SRAM 00000000 - 0001ffff
    //      LED  80000000
@@ -230,6 +241,7 @@ end
    //      CDT  80000010 - 80000014
    //   WS2812B 80000020 - 80000024
    //      DSP  50000000 - 500007ff  (2K display BRAM)
+   //      SPI  80000030 - 80000031
    assign sram_sel = mem_valid && (mem_addr < MEMBYTES);
    assign leds_sel = mem_valid && (mem_addr == 32'h80000000);
    assign uart_sel = mem_valid && ((mem_addr & 32'hfffffff8) == 32'h80000008);
@@ -237,6 +249,7 @@ end
    assign ws2812b_sel = mem_valid && (mem_addr == 32'h80000020);
    assign dsp_sel = mem_valid && (mem_addr >= DSP_BASE) && (mem_addr < (DSP_BASE + DSP_SIZE));
    assign psram_sel = mem_valid && (mem_addr >= PSRAM_BASE) && (mem_addr < (PSRAM_BASE + PSRAM_SIZE));
+   assign spi_sel = mem_valid && (mem_addr >= SPI_BASE) && (mem_addr < (SPI_BASE + SPI_SIZE));
     
   // Core can proceed when the selected slave is ready.
   assign mem_ready = mem_valid & (
@@ -246,7 +259,8 @@ end
                (uart_sel    & uart_ready)  |
                (cdt_sel     & cdt_ready)   |
                (ws2812b_sel & ws2812b_ready) |
-               (dsp_sel     & dsp_ready)
+               (dsp_sel     & dsp_ready)   |
+               (spi_sel     & spi_ready)
               );
 
 
@@ -256,7 +270,8 @@ end
                       dsp_sel     ? dsp_data_o  :
                       leds_sel    ? leds_data_o :
                       uart_sel    ? uart_data_o :
-                      cdt_sel     ? cdt_data_o  : 32'h0;
+                      cdt_sel     ? cdt_data_o  :
+                      spi_sel     ? spi_data_o  : 32'h0;
 
 wire status;
 
@@ -288,6 +303,24 @@ end
       .reset_button(reset_button),
       .reset_n(reset_n)
       );
+
+  spi spi(
+    .clk(clk),          // System clock
+    .reset_n(reset_n),  // Active low reset
+    .spi_cs(CS_FPGA),   // SPI chip select (active low)
+    .spi_clk(SCK),      // SPI clock
+    .spi_mosi(MOSI),    // SPI Master Out Slave In
+    .spi_miso(MISO),    // SPI Master In Slave Out
+
+    // picorv32 memory interface
+    .mem_valid_spi_in(spi_sel && !mem_addr[8]),
+    .mem_valid_spi_out(spi_sel && mem_addr[8]),
+    .mem_addr(mem_addr[7:0]),       // byte address within 256-byte BRAM
+    .mem_wdata(mem_wdata),
+    .mem_wstrb(mem_wstrb),      // byte enables; 0 => read
+    .mem_ready(spi_ready),
+    .mem_rdata(spi_data_o)
+  );
 
    display dsp
      (

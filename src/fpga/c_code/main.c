@@ -22,15 +22,82 @@ unsigned int test_vals[] = {0, 0xffffffff, 0xaaaaaaaa, 0x55555555, 0xdeadbeef};
    above to free much of the SRAM for other things
 */
 
+typedef struct __attribute__((packed)) {
+  unsigned char v1;
+  unsigned short v2;
+  unsigned int v3;
+} test_t;
+
 int mem_test (void)
 {
+  // SPI test
+  uart_puts("SPI test\r\n");
+#if 1
+  test_t* t = (test_t*) 0x80001000;
+  t->v1 = 0x11;
+  t->v2 = 0x2233;
+  t->v3 = 0x44556677;
+#if 0
+  t =  (test_t*) 0x80001100;
+  t->v1 = 0x88;
+  t->v2 = 0x7766;
+  t->v3 = 0x55443322;
+#endif
+  t = (test_t*) 0x80001000;
+  if ((t->v1 != 0x11) || (t->v2 != 0x2233) || (t->v3 != 0x44556677)) {
+    uart_puts("SPI test FAILED (0)\r\n");
+    uart_puts("v1: ");
+    uart_print_hex(t->v1);
+    uart_puts(", v2: ");
+    uart_print_hex(t->v2);
+    uart_puts(", v3: ");
+    uart_print_hex(t->v3);
+    uart_puts("\r\n");
+    return 1;
+  }
+  t =  (test_t*) 0x80001100;
+  t->v1 = 0x88;
+  t->v2 = 0x7766;
+  t->v3 = 0x55443322;
+  if ((t->v1 != 0x88) || (t->v2 != 0x7766) || (t->v3 != 0x55443322)) {
+    uart_puts("SPI test FAILED (1)\r\n");
+    uart_puts("v1: ");
+    uart_print_hex(t->v1);
+    uart_puts(", v2: ");
+    uart_print_hex(t->v2);
+    uart_puts(", v3: ");
+    uart_print_hex(t->v3);
+    uart_puts("\r\n");
+    return 1;
+  }
+  #endif
+  volatile unsigned char* spi = (volatile unsigned char*) 0x80001000;
+  *spi = 0x11;
+  uart_print_hex(*spi);
+  uart_puts("\r\n");
+  uart_print_hex(*spi);
+  uart_puts("\r\n");
+
+  for (int i = 0; i < 2 * 256; i++) {
+    *(spi + i) = (i + 3) % 256;
+  }
+  for (int i = 0; i < 2 * 256; i++) {
+    if (*(spi + i) != (i + 3) % 256) {
+      uart_puts("Error at idx ");
+      uart_print_hex(i);
+      uart_puts(": ");
+      uart_print_hex(*(spi + i));
+      uart_puts("\r\n");
+    }
+  }
+  return 0;
 #if 0
   *mem = 0xdeadbeef;
   uart_puts("peek(0x40000000): ");
   uart_print_hex((unsigned int) *mem);
   uart_puts("\r\n");
 #endif
-#if 1
+#if 0
   static int flip = 0;
 
   *mem = flip ? 0x12345678 : 0xdeadbeef;
@@ -46,7 +113,7 @@ int mem_test (void)
   uart_print_hex((unsigned int) *mem);
   uart_puts("\r\n");
 #endif
-#if 1
+#if 0
   uart_puts("peek(0x40000004): ");
   uart_print_hex((unsigned int) *mem2);
   uart_puts("\r\n");
@@ -83,7 +150,7 @@ int mem_test (void)
 #endif
   //return 0;
 #endif
-#if 1
+#if 0
   int i, test, errors;
   unsigned int val, val_read;
 

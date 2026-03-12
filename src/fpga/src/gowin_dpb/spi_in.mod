@@ -1,0 +1,24 @@
+-series GW2A
+-device GW2A-18
+-device_version C
+-package PBGA256
+-part_number GW2A-LV18PG256C8/I7
+
+
+-mod_name SPI_in
+-file_name spi_in
+-path //wsl.localhost/Ubuntu-24.04/home/arno/git/MiniPC/src/fpga/src/gowin_dpb/
+-type RAM_DP
+-file_type vlg
+-bram_b true
+-dev_type GW2A-18C
+-depth_0 256
+-depth_1 256
+-width_0 8
+-width_1 8
+-read_mode_0 pipeline
+-read_mode_1 pipeline
+-write_mode_0 normal
+-write_mode_1 normal
+-speed false
+-reset_mode sync

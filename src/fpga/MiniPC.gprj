@@ -11,6 +11,8 @@
         <File path="src/gowin_clkdiv/gowin_clkdiv0.v" type="file.verilog" enable="1"/>
         <File path="src/gowin_dpb/blk_mem_gen_2.v" type="file.verilog" enable="1"/>
         <File path="src/gowin_dpb/blk_mem_gen_3.v" type="file.verilog" enable="1"/>
+        <File path="src/gowin_dpb/spi_in.v" type="file.verilog" enable="1"/>
+        <File path="src/gowin_dpb/spi_out.v" type="file.verilog" enable="1"/>
         <File path="src/gowin_rpll/gowin_rpll.v" type="file.verilog" enable="1"/>
         <File path="src/gowin_rpll/gowin_rpll0.v" type="file.verilog" enable="1"/>
         <File path="src/hdmi/audio_clock_regeneration_packet.sv" type="file.verilog" enable="1"/>
@@ -28,6 +30,7 @@
         <File path="src/psram.v" type="file.verilog" enable="1"/>
         <File path="src/reset.v" type="file.verilog" enable="1"/>
         <File path="src/simpleuart.v" type="file.verilog" enable="1"/>
+        <File path="src/spi.v" type="file.verilog" enable="1"/>
         <File path="src/sram.v" type="file.verilog" enable="1"/>
         <File path="src/sram8bit.v" type="file.verilog" enable="1"/>
         <File path="src/tang_nano_9k_leds.v" type="file.verilog" enable="1"/>
