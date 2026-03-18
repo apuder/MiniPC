@@ -53,6 +53,10 @@ module top (
             input MOSI,
             output MISO,
 
+            output [2:0] ESP_S,
+            output ESP_REQ,
+            input ESP_DONE,
+
 `ifdef USE_LA
             output wire       clk_out,
             output wire       mem_instr, 
@@ -117,6 +121,9 @@ module top (
    wire                       spi_sel;
    wire                       spi_ready;
    wire [31:0]                spi_data_o;
+   wire                       esp_sel;
+   wire                       esp_ready;
+   wire [31:0]                esp_data_o;
    wire                       psram_sel;
    reg                        psram_chip_present;
 
@@ -241,7 +248,8 @@ end
    //      CDT  80000010 - 80000014
    //   WS2812B 80000020 - 80000024
    //      DSP  50000000 - 500007ff  (2K display BRAM)
-   //      SPI  80000030 - 80000031
+    //      SPI  80001000 - 800011ff
+   //      ESP  80002000
    assign sram_sel = mem_valid && (mem_addr < MEMBYTES);
    assign leds_sel = mem_valid && (mem_addr == 32'h80000000);
    assign uart_sel = mem_valid && ((mem_addr & 32'hfffffff8) == 32'h80000008);
@@ -250,7 +258,8 @@ end
    assign dsp_sel = mem_valid && (mem_addr >= DSP_BASE) && (mem_addr < (DSP_BASE + DSP_SIZE));
    assign psram_sel = mem_valid && (mem_addr >= PSRAM_BASE) && (mem_addr < (PSRAM_BASE + PSRAM_SIZE));
    assign spi_sel = mem_valid && (mem_addr >= SPI_BASE) && (mem_addr < (SPI_BASE + SPI_SIZE));
-    
+   assign esp_sel = mem_valid && (mem_addr == 32'h80002000);
+
   // Core can proceed when the selected slave is ready.
   assign mem_ready = mem_valid & (
                (psram_sel   & psram_ready) |
@@ -260,7 +269,8 @@ end
                (cdt_sel     & cdt_ready)   |
                (ws2812b_sel & ws2812b_ready) |
                (dsp_sel     & dsp_ready)   |
-               (spi_sel     & spi_ready)
+               (spi_sel     & spi_ready)   |
+               (esp_sel     & esp_ready)
               );
 
 
@@ -271,7 +281,8 @@ end
                       leds_sel    ? leds_data_o :
                       uart_sel    ? uart_data_o :
                       cdt_sel     ? cdt_data_o  :
-                      spi_sel     ? spi_data_o  : 32'h0;
+                      spi_sel     ? spi_data_o  :
+                      esp_sel     ? esp_data_o  : 32'h0;
 
 wire status;
 
@@ -315,13 +326,29 @@ end
     // picorv32 memory interface
     .mem_valid_spi_in(spi_sel && !mem_addr[8]),
     .mem_valid_spi_out(spi_sel && mem_addr[8]),
-    .mem_addr(mem_addr[7:0]),       // byte address within 256-byte BRAM
+    .mem_addr({24'd0, mem_addr[7:0]}),       // byte address within 256-byte BRAM
     .mem_wdata(mem_wdata),
     .mem_wstrb(mem_wstrb),      // byte enables; 0 => read
     .mem_ready(spi_ready),
     .mem_rdata(spi_data_o)
   );
 
+  esp esp(
+    .clk(clk),          // System clock
+    .reset_n(reset_n),  // Active low reset
+    .esp_s(ESP_S),      // ESP 3-bit request code
+    .req(ESP_REQ),      // High when a request is made to the ESP
+    .done(ESP_DONE),    // High when the ESP has completed the request
+
+    // picorv32 memory interface
+    .mem_valid(esp_sel),
+    .mem_wdata(mem_wdata),
+    .mem_wstrb(mem_wstrb),      // byte enables; 0 => read
+
+    .mem_ready(esp_ready),
+    .mem_rdata(esp_data_o)
+  );
+  
    display dsp
      (
       .clk(clk),

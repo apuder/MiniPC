@@ -7,6 +7,7 @@
     <FileList>
         <File path="src/countdown_timer.v" type="file.verilog" enable="1"/>
         <File path="src/display.v" type="file.verilog" enable="1"/>
+        <File path="src/esp.v" type="file.verilog" enable="1"/>
         <File path="src/force_rebuild.v" type="file.verilog" enable="1"/>
         <File path="src/gowin_clkdiv/gowin_clkdiv0.v" type="file.verilog" enable="1"/>
         <File path="src/gowin_dpb/blk_mem_gen_2.v" type="file.verilog" enable="1"/>

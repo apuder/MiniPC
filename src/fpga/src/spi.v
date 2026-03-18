@@ -74,19 +74,31 @@ wire [7:0] spi_in_doutb;
 wire [7:0] spi_out_doutb;
 
 // SPI slave (mode 0): sample MOSI on rising edge, update MISO on falling edge.
-reg [1:0] spi_clk_sync;
-reg [1:0] spi_cs_sync;
-reg [1:0] spi_mosi_sync;
+// Use 3-stage synchronizers for CDC robustness:
+//   stage0 catches metastability, stage1 is synchronized signal,
+//   stage2 is previous stage1 value for edge detection.
+reg [2:0] spi_clk_sync;
+reg [2:0] spi_cs_sync;
 
 reg       spi_active;
-reg       spi_done;
 reg [2:0] spi_bit_cnt;
 reg [7:0] spi_byte_cnt;
+reg [2:0] rx_bit_cnt;
+reg [7:0] rx_byte_cnt;
 reg [7:0] rx_shift;
 reg [7:0] tx_shift;
 reg       spi_miso_reg;
+reg [7:0] tx_first_byte;
+
+reg       rx_write_pending;
+reg [7:0] rx_write_addr;
+reg [7:0] rx_write_data;
+
+reg [2:0] spi_mosi_sync;
 
 reg       tx_read_pending;
+reg       tx_read_wait;
+reg       tx_read_wait2;
 reg [7:0] tx_read_addr;
 reg [7:0] tx_next_byte;
 reg       tx_next_valid;
@@ -141,18 +153,18 @@ always @(*) begin
     end
 
     // SPI-side BRAM Port B access in clk domain.
-    if (spi_active) begin
-        if (tx_read_pending) begin
-            spi_out_ceb = 1'b1;
-            spi_out_adb = tx_read_addr;
-        end
+    if (tx_read_pending && spi_active) begin
+        spi_out_ceb = 1'b1;
+        spi_out_adb = tx_read_addr;
+    end
 
-        if (spi_done) begin
-            spi_in_ceb  = 1'b1;
-            spi_in_wreb = 1'b1;
-            spi_in_adb  = spi_byte_cnt;
-            spi_in_dinb = {rx_shift[6:0], spi_mosi_sync[1]};
-        end
+    // Do not gate RX writes with spi_active: byte 0 can arrive before the
+    // clk-domain CS synchronizer asserts spi_active.
+    if (rx_write_pending) begin
+        spi_in_ceb  = 1'b1;
+        spi_in_wreb = 1'b1;
+        spi_in_adb  = rx_write_addr;
+        spi_in_dinb = rx_write_data;
     end
 end
 
@@ -167,24 +179,54 @@ always @(posedge clk) begin
         target_in_lat  <= 1'b0;
         rdata_lat      <= 32'b0;
         mem_ready_lat  <= 1'b0;
-        spi_clk_sync   <= 2'b00;
-        spi_cs_sync    <= 2'b11;
-        spi_mosi_sync  <= 2'b00;
+        spi_clk_sync   <= 3'b000;
+        spi_cs_sync    <= 3'b111;
+        spi_mosi_sync  <= 3'b000;
         spi_active     <= 1'b0;
-        spi_done       <= 1'b0;
         spi_bit_cnt    <= 3'b000;
         spi_byte_cnt   <= 8'b0;
+        rx_bit_cnt     <= 3'b000;
+        rx_byte_cnt    <= 8'b0;
         rx_shift       <= 8'b0;
         tx_shift       <= 8'b0;
         spi_miso_reg   <= 1'b0;
+        tx_first_byte  <= 8'b0;
+        rx_write_pending <= 1'b0;
+        rx_write_addr    <= 8'b0;
+        rx_write_data    <= 8'b0;
         tx_read_pending <= 1'b0;
+        tx_read_wait    <= 1'b0;
+        tx_read_wait2   <= 1'b0;
         tx_read_addr    <= 8'b0;
         tx_next_byte    <= 8'b0;
         tx_next_valid   <= 1'b0;
         tx_load_first   <= 1'b0;
     end else begin
         mem_ready_lat <= 1'b0;
-        spi_done      <= 1'b0;
+
+        // BRAM Port B write pulse is one clk wide.
+        if (rx_write_pending)
+            rx_write_pending <= 1'b0;
+
+        // Keep RX state aligned to synchronized CS and ignore SCLK activity
+        // while CS is inactive-high.
+        if (spi_cs_sync[2:1] == 2'b10 || spi_cs_sync[2:1] == 2'b01) begin
+            rx_bit_cnt  <= 3'b000;
+            rx_byte_cnt <= 8'b0;
+            rx_shift    <= 8'b0;
+        end else if (!spi_cs_sync[1] && spi_clk_sync[2:1] == 2'b01) begin
+            rx_shift <= {rx_shift[6:0], spi_mosi_sync[1]};
+            if (rx_bit_cnt == 3'b111) begin
+                rx_bit_cnt       <= 3'b000;
+                rx_write_pending <= 1'b1;
+                rx_write_addr    <= rx_byte_cnt;
+                rx_write_data    <= {rx_shift[6:0], spi_mosi_sync[1]};
+                if (rx_byte_cnt != 8'hFF)
+                    rx_byte_cnt <= rx_byte_cnt + 8'h01;
+            end else begin
+                rx_bit_cnt <= rx_bit_cnt + 3'b001;
+            end
+        end
 
         // Memory interface state machine
         if (!busy) begin
@@ -201,6 +243,12 @@ always @(posedge clk) begin
             end
         end else begin
             step <= step + 3'd1;
+
+            // Keep a local copy of SPI_out byte 0 so a new SPI transaction can
+            // start transmitting immediately without waiting for a BRAM read.
+            if (op_write && !target_in_lat && phase_strb && (bram_addr_busy == 8'h00)) begin
+                tx_first_byte <= phase_wbyte;
+            end
 
             // Capture read data from PREVIOUS address (READ_MODE0=1 => 2-cycle latency)
             // prefetch addr+0 -> capture at step 2
@@ -225,38 +273,54 @@ always @(posedge clk) begin
         end
 
         // Synchronize SPI pins into clk domain.
-        spi_clk_sync  <= {spi_clk_sync[0], spi_clk};
-        spi_cs_sync   <= {spi_cs_sync[0], spi_cs};
-        spi_mosi_sync <= {spi_mosi_sync[0], spi_mosi};
+        spi_clk_sync  <= {spi_clk_sync[1:0], spi_clk};
+        spi_cs_sync   <= {spi_cs_sync[1:0], spi_cs};
+        spi_mosi_sync <= {spi_mosi_sync[1:0], spi_mosi};
 
-        // Read data from SPI_out Port B arrives one clk after request.
-        if (tx_read_pending) begin
+        // SPI_out Port B uses registered output, so capture data two cycles
+        // after the read strobe has been issued.
+        if (tx_read_wait2) begin
             tx_next_byte  <= spi_out_doutb;
             tx_next_valid <= 1'b1;
+        end
+
+        if (tx_read_pending) begin
             tx_read_pending <= 1'b0;
+            tx_read_wait <= 1'b1;
+            tx_read_wait2 <= 1'b0;
+        end else if (tx_read_wait) begin
+            tx_read_wait <= 1'b0;
+            tx_read_wait2 <= 1'b1;
+        end else begin
+            tx_read_wait <= 1'b0;
+            tx_read_wait2 <= 1'b0;
         end
 
         // Start a new 256-byte transaction on CS falling edge.
-        if (spi_cs_sync == 2'b10) begin
+        if (spi_cs_sync[2:1] == 2'b10) begin
             spi_active      <= 1'b1;
             spi_bit_cnt     <= 3'b000;
             spi_byte_cnt    <= 8'b0;
-            rx_shift        <= 8'b0;
-            tx_shift        <= 8'b0;
-            spi_miso_reg    <= 1'b0;
-            tx_read_addr    <= 8'h00;
+            tx_shift        <= tx_first_byte;
+            spi_miso_reg    <= tx_first_byte[7];
+            tx_read_addr    <= 8'h01;
             tx_read_pending <= 1'b1;
+            tx_read_wait    <= 1'b0;
+            tx_read_wait2   <= 1'b0;
             tx_next_valid   <= 1'b0;
-            tx_load_first   <= 1'b1;
+            tx_load_first   <= 1'b0;
         end
 
         // End transaction on CS rising edge.
-        if (spi_cs_sync == 2'b01) begin
+        if (spi_cs_sync[2:1] == 2'b01) begin
             spi_active      <= 1'b0;
             tx_read_pending <= 1'b0;
+            tx_read_wait    <= 1'b0;
+            tx_read_wait2   <= 1'b0;
             tx_next_valid   <= 1'b0;
             tx_load_first   <= 1'b0;
             spi_bit_cnt     <= 3'b000;
+            spi_byte_cnt    <= 8'b0;
         end
 
         if (spi_active) begin
@@ -271,11 +335,8 @@ always @(posedge clk) begin
             end
 
             // Detect SPI clock edges after synchronization.
-            if (spi_clk_sync == 2'b01) begin
-                // Rising edge: sample MOSI.
-                rx_shift <= {rx_shift[6:0], spi_mosi_sync[1]};
+            if (spi_clk_sync[2:1] == 2'b01) begin
                 if (spi_bit_cnt == 3'b111) begin
-                    spi_done <= 1'b1;
                     spi_bit_cnt <= 3'b000;
 
                     if (spi_byte_cnt != 8'hFF) begin
@@ -297,7 +358,7 @@ always @(posedge clk) begin
                 end else begin
                     spi_bit_cnt <= spi_bit_cnt + 3'b001;
                 end
-            end else if (spi_clk_sync == 2'b10) begin
+            end else if (spi_clk_sync[2:1] == 2'b10) begin
                 // Falling edge: shift data to present next MISO bit.
                 if (!tx_load_first) begin
                     tx_shift <= {tx_shift[6:0], 1'b0};

@@ -28,6 +28,25 @@ typedef struct __attribute__((packed)) {
   unsigned int v3;
 } test_t;
 
+void spi_test()
+{
+  volatile unsigned char* spi_out = (unsigned char*) 0x80001100;
+  for (int i = 0; i < 256; i++) {
+    *(spi_out + i) = i % 10;
+  }
+  volatile unsigned char* spi_in = (unsigned char*) 0x80001000;
+  *spi_in = 0x42;
+  // Signal ESP to perform a SPI transaction
+  volatile unsigned char* esp = (unsigned char*) 0x80002000;
+  *esp = 3;
+  // Busy wait for ESP to finish SPI transaction
+  while (*esp == 0) ;
+  for (int i = 0; i < 256; i++) {
+    uart_print_hex(*(spi_in + i));
+    uart_puts("\r\n");
+  }
+}
+
 int mem_test (void)
 {
   // SPI test
@@ -335,6 +354,7 @@ int main()
     uart_puts("   l: set RGB LED\r\n");
     uart_puts("   m: memory test\r\n");
     uart_puts("   r: read clock\r\n");
+    uart_puts("   s: SPI test\r\n");
     ch = uart_getchar();
     switch (ch) {
     case 'c':
@@ -372,6 +392,9 @@ int main()
       uart_puts("time is ");
       uart_print_hex(readtime());
       uart_puts("\r\n");
+      break;
+    case 's':
+      spi_test();
       break;
     default:
       uart_puts("  Try again...\r\n");
