@@ -1,0 +1,13 @@
+choice
+    prompt "Target"
+    default MINI_PC
+    help
+        Select the target platform...
+
+config PROGRAMMER_20K
+    bool "Programmer-20K"
+config STRIPBOARD
+    bool "Stripboard"
+config MINI_PC
+    bool "MiniPC"
+endchoice

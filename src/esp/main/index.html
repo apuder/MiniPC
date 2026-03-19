@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,initial-scale=1" />
+	<title>Programmer for the 20K</title>
+	<link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg">
+	<style>
+		/* Modern, compact CSS — all inlined so this file is fully self-contained */
+		:root{
+			--bg:#0b1220; --card:#0f1b2a; --card-alt:#071026; --muted:#9aa9bd; --accent:#7c3aed; --accent-2:#06b6d4;
+			--accent-3:#f97316; /* warm accent for 20K */
+			--glass: rgba(255,255,255,0.04);
+			font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+		}
+		html,body{height:100%;margin:0;background:linear-gradient(180deg,#071023 0%, #07131f 60%); color:#e6eef6}
+		.wrap{max-width:980px;margin:36px auto;padding:28px;border-radius:14px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.012));box-shadow:0 8px 30px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.02)}
+		header{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+		h1{font-size:20px;margin:0}
+		p.lead{color:var(--muted);margin:4px 0 0;font-size:13px}
+
+		.grid{display:grid;grid-template-columns:1fr 360px;gap:20px}
+		.card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:18px;border-radius:12px;border:1px solid rgba(255,255,255,0.03);box-shadow: 0 6px 18px rgba(1,4,10,0.6)}
+
+		/* distinct section accents */
+		.card.wifi{border-left:6px solid rgba(124,58,237,0.95); background:linear-gradient(180deg, rgba(124,58,237,0.02), rgba(255,255,255,0.002));}
+		.card.wifi .field{max-width:640px}
+		.card.wifi .row{justify-content:flex-start}
+		.card.twentyk{border-left:6px solid rgba(249,115,22,0.9); background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.006));}
+		.card.serial{border-left:6px solid rgba(6,182,212,0.95); background:linear-gradient(180deg, rgba(6,182,212,0.03), rgba(255,255,255,0.006));}
+
+		.field{display:flex;flex-direction:column;margin-bottom:12px}
+		.field.row-inline{display:flex;flex-direction:row;gap:12px;align-items:center}
+		label{font-size:12px;color:var(--muted);display:inline-block;margin-bottom:6px}
+		input[type=text], input[type=password], select{padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-size:14px;outline:none}
+		select{background-color:rgba(0,0,0,0.4);color:#e6eef6}
+		select option{background-color:#0b1220;color:#e6eef6}
+		.row{display:flex;gap:10px;align-items:center}
+		.btn{background:linear-gradient(90deg,var(--accent), #4c1d95); border:0;color:white;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:700;box-shadow:0 6px 16px rgba(124,58,237,0.08)}
+		.btn.disabled{opacity:0.5;cursor:not-allowed}
+
+		.status {display:flex;gap:10px;align-items:center}
+		.card h2{margin:0 0 12px 0;padding:6px 0;font-size:16px;color: #e9f0ff}
+		.card .lead{color:var(--muted);font-size:12px;margin-top:6px}
+		.badge{padding:8px 12px;border-radius:999px;font-weight:700;font-size:12px}
+		.badge{padding:6px 10px;border-radius:999px;font-weight:700;font-size:12px}
+        
+		.badge.off{background:rgba(255,255,255,0.03);color:var(--muted);border:1px solid rgba(255,255,255,0.02)}
+
+		/* Upload area */
+		.drop{min-height:160px;border-radius:10px;border:1px dashed rgba(255,255,255,0.6);display:flex;align-items:center;justify-content:center;flex-direction:column;padding:18px 22px;background:linear-gradient(180deg, rgba(255,255,255,0.018), rgba(255,255,255,0.002));text-align:center;color:var(--muted);position:relative;width:100%;box-sizing:border-box}
+		.drop.drag{border-color: rgba(124,58,237,0.7);box-shadow:0 6px 18px rgba(124,58,237,0.12)}
+		.drop.error{border-color: rgba(255, 99, 99, 0.9);box-shadow:0 6px 20px rgba(255, 80, 80, 0.12)}
+		.drop .upload-error-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+		.drop .upload-error-overlay > div{pointer-events:auto;background:linear-gradient(90deg, rgba(255,40,40,0.16), rgba(255,80,80,0.06));color:#ffd7d7;padding:12px 16px;border-radius:10px;border:1px solid rgba(255,110,110,0.12);font-weight:700;backdrop-filter: blur(6px);}
+		.drop.error .upload-error-overlay > div{transform:translateY(0);opacity:1}
+		.files{margin-top:10px;text-align:left;width:100%}
+		.fileitem{display:flex;align-items:center;gap:12px;padding:6px;border-radius:8px;background:linear-gradient(90deg, rgba(255,255,255,0.01), transparent);border:1px solid rgba(255,255,255,0.01);margin-top:8px}
+		.progress{height:8px;background:rgba(255,255,255,0.03);border-radius:999px;overflow:hidden;flex:1}
+		.progress > b{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));width:0%}
+		small.muted{color:var(--muted);font-size:12px}
+
+		/* Serial monitor */
+		.serial-header{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:10px}
+		.serial-header .lead{margin:2px 0 0 0}
+		.serial-actions{display:flex;align-items:center;gap:10px}
+		.serial-log-wrap{border:1px solid rgba(255,255,255,0.06);border-radius:10px;background:linear-gradient(180deg, rgba(0,0,0,0.25), rgba(255,255,255,0.02));padding:6px 8px}
+		#serialLog{height:220px;margin:0;padding:10px 12px;overflow-y:auto;font-family:"JetBrains Mono","SFMono-Regular","Menlo","Consolas",monospace;font-size:13px;white-space:pre-wrap;word-break:break-word;background:transparent;color:#e6eef6}
+		.badge.serial-live{background:linear-gradient(90deg, #0ea5e933, #06b6d466);color:#0f1724}
+
+		.btn.serial-primary{background:linear-gradient(90deg, #06b6d4, #0891b2); border:0;color:white;box-shadow:0 6px 16px rgba(6,182,212,0.12)}
+
+		footer.help{margin-top:16px;color:var(--muted);font-size:13px}
+
+		/* 20K section layout helpers */
+		.twentyk-top{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:18px}
+		.twentyk-controls{display:flex;gap:18px;align-items:center}
+		.twentyk-controls .field{min-width:180px}
+		.badge.status-badge{padding:10px 14px;font-size:13px}
+		.drop-inner{max-width:820px;width:100%;align-items:flex-start;text-align:left}
+		#uploadSection{display:flex;flex-direction:column;gap:12px}
+		#uploadProgressWrap{max-width:820px}
+		#uploadResult{min-height:20px}
+		pre.api{background:rgba(0,0,0,0.3);padding:10px;border-radius:8px;overflow:auto;font-size:12px}
+
+		@media(max-width:980px){.grid{grid-template-columns:1fr;}}
+		.offline-overlay {
+			position: fixed;
+			z-index: 9999;
+			top: 0; left: 0; right: 0; bottom: 0;
+			background: rgba(20,24,32,0.82);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			color: #fff;
+			font-size: 2.1rem;
+			font-weight: 700;
+			letter-spacing: 1px;
+			text-shadow: 0 2px 16px #000, 0 1px 0 #222;
+			transition: opacity 0.3s;
+			pointer-events: all;
+		}
+		.offline-overlay[hidden] { display: none; }
+	</style>
+</head>
+
+<body>
+		<div class="wrap">
+			<div id="offlineOverlay" class="offline-overlay" hidden>Cannot reach the programmer</div>
+		<header>
+			<svg width="36" height="36" viewBox="0 0 24 24" fill="none" aria-hidden>
+				<!-- backdrop -->
+				<rect width="24" height="24" rx="6" fill="#0b1220"></rect>
+				<!-- chip body -->
+				<rect x="5" y="5" width="14" height="14" rx="2.5" fill="#0f1b2a" stroke="#7c3aed" stroke-width="1.2"></rect>
+				<!-- pins -->
+				<path stroke="#06b6d4" stroke-width="1.1" stroke-linecap="round" d="
+					M7 4 L7 5 M10 4 L10 5 M13 4 L13 5 M16 4 L16 5
+					M7 19 L7 20 M10 19 L10 20 M13 19 L13 20 M16 19 L16 20
+					M4 7 L5 7 M4 10 L5 10 M4 13 L5 13 M4 16 L5 16
+					M19 7 L20 7 M19 10 L20 10 M19 13 L20 13 M19 16 L20 16
+				"></path>
+				<!-- subtle traces -->
+				<path d="M8 9h8 M8 12h6 M8 15h4" stroke="#f97316" stroke-width="1.1" stroke-linecap="round"></path>
+			</svg>
+			<div>
+				<h1>Programmer 20K</h1>
+				<p class="lead">Web-based bitstream uploader for the 20K.</p>
+			</div>
+		</header>
+
+		<main>
+			<section class="card wifi" id="wifiSection" style="margin-bottom:32px">
+				<h2 style="margin-top:0;margin-bottom:18px;font-size:18px;letter-spacing:0.5px">WiFi</h2>
+				<div class="field">
+					<label for="ssid">SSID</label>
+					<input id="ssid" type="text" placeholder="SSID" autocapitalize="off" autocomplete="off">
+				</div>
+				<div class="field">
+					<label for="password">Password</label>
+					<input id="password" type="password" placeholder="••••••••">
+				</div>
+				<div class="row" style="margin-top:12px;justify-content:flex-start">
+					<button class="btn" id="connectBtn">Connect</button>
+				</div>
+			</section>
+
+			<section class="card twentyk" style="margin-bottom:32px">
+				<h2 style="margin-top:0;margin-bottom:18px;font-size:18px;letter-spacing:0.5px">Uploader</h2>
+				<div class="twentyk-top">
+					<div class="twentyk-controls">
+                        
+						<div class="field" style="margin-bottom:0">
+							<label for="storeSelect">Target</label>
+							<select id="storeSelect" aria-label="Choose target">
+								<option value="flash">Flash</option>
+								<option value="sram" selected>SRAM</option>
+							</select>
+						</div>
+					</div>
+				</div>
+				<div id="uploadSection">
+					<div id="droparea" class="drop" tabindex="0">
+						<div class="drop-inner" style="display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none">
+							<svg width="58" height="58" viewBox="0 0 24 24" fill="none"><path d="M12 3v10" stroke="#94a3b8" stroke-width="1.6" stroke-linecap="round"/><path d="M16 7l-4-4-4 4" stroke="#94a3b8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="3" y="13" width="18" height="7" rx="2" stroke="#94a3b8" stroke-width="1.2"/></svg>
+							<div style="font-weight:700">Drop a file to upload</div>
+						</div>
+						<input id="fileInput" type="file" style="display:none">
+						<div class="upload-error-overlay" style="display:none;">
+							<div id="uploadError" role="status" aria-live="polite"></div>
+						</div>
+					</div>
+					<div class="files" id="filesList" aria-live="polite"></div>
+					<div id="uploadProgressWrap" style="margin-top:12px;display:none">
+						<div class="progress"><b id="uploadProgressBar" style="width:0%"></b></div>
+						<div id="uploadProgressText" style="font-size:13px;color:var(--muted);margin-top:4px"></div>
+					</div>
+					<div id="uploadResult" style="margin-top:10px;font-size:15px;font-weight:600"></div>
+				</div>
+			</section>
+
+			<section class="card serial">
+				<div class="serial-header">
+					<div>
+						<h2 style="margin:0 0 6px 0;font-size:18px;letter-spacing:0.5px">Serial Monitor</h2>
+					</div>
+					<div class="serial-actions">
+						<button class="btn serial-primary" id="serialClear">Clear</button>
+					</div>
+				</div>
+				<div class="serial-log-wrap">
+					<pre id="serialLog" aria-live="polite"></pre>
+				</div>
+				<div style="margin-top:10px">
+					<input type="text" id="serialInput" placeholder="Type to send to serial..." style="width:100%;box-sizing:border-box" />
+				</div>
+			</section>
+		</main>
+	</div>
+
+	<script>
+		// Redesigned JS for new UI structure and polling
+		(function(){
+			const ssid = el('ssid'), pw = el('password'), connectBtn = el('connectBtn');
+			const wifiSection = el('wifiSection');
+			const offlineOverlay = el('offlineOverlay');
+            
+			const drop = el('droparea'), fileInput = el('fileInput'), filesList = el('filesList');
+			const store = el('storeSelect');
+			const uploadSection = el('uploadSection');
+			const uploadProgressWrap = el('uploadProgressWrap');
+			const uploadProgressBar = el('uploadProgressBar');
+			const uploadProgressText = el('uploadProgressText');
+			const uploadResult = el('uploadResult');
+			const serialLog = el('serialLog');
+			const serialClear = el('serialClear');
+			const serialInput = el('serialInput');
+			const serialDecoder = new TextDecoder();
+
+			let isConnected = true;
+			let polling = null;
+			let reachabilityTimer = null;
+			let serialSocket = null;
+			let serialReconnect = null;
+			let serialBackoff = 500;
+
+			connectBtn.addEventListener('click', async()=>{
+				const body = { ssid: ssid.value || '', password: pw.value || '' };
+				connectBtn.disabled = true; connectBtn.innerText = 'Connecting...';
+				try{
+					const res = await fetch('/wifi', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+					const json = await res.json().catch(()=>({success:false}));
+                    
+				} catch(e){}
+				finally{ 
+					connectBtn.disabled=false; 
+					connectBtn.innerText='Connect';
+					wifiSection.style.display = 'none';
+				}
+			});
+
+            
+
+            
+
+            
+
+			function setUIEnabled(enabled){
+				// Disable/enable all UI controls
+				ssid.disabled = !enabled;
+				pw.disabled = !enabled;
+				connectBtn.disabled = !enabled;
+				store.disabled = !enabled;
+				fileInput.disabled = !enabled;
+				// Optionally, visually indicate disabled state
+				if(!enabled){
+					connectBtn.classList.add('disabled');
+				} else {
+					connectBtn.classList.remove('disabled');
+				}
+			}
+
+			serialClear.addEventListener('click', ()=>{
+				serialLog.textContent = '';
+				serialLog.scrollTop = serialLog.scrollHeight;
+				serialInput.value = '';
+			});
+
+			// Handle serial input: echo in input, send each keystroke, clear on Enter
+			serialInput.addEventListener('keydown', (e)=>{
+				if(!serialSocket || serialSocket.readyState !== WebSocket.OPEN) return;
+				const sendBytes = (bytes)=>{ try{ serialSocket.send(new Uint8Array(bytes)); }catch(_){} };
+				
+				// Ctrl+Letter -> control codes (Ctrl+A=0x01 .. Ctrl+Z=0x1A)
+				if(e.ctrlKey){
+					const key = e.key.toUpperCase();
+					if(key.length === 1 && key >= 'A' && key <= 'Z'){
+						sendBytes([key.charCodeAt(0) - 64]);
+						// keep default so input caret stays; Ctrl+C/etc won't insert text anyway
+						return;
+					}
+				}
+				
+				// Special keys mapping
+				switch(e.key){
+					case 'Enter':
+						// Send CR and clear input
+						sendBytes([0x0D]);
+						serialInput.value = '';
+						e.preventDefault();
+						return;
+					case 'Backspace':
+						sendBytes([0x08]);
+						// allow default to modify input content
+						return;
+					case 'Tab':
+						sendBytes([0x09]);
+						// prevent tab focus change so input keeps focus
+						e.preventDefault();
+						return;
+					case 'Escape':
+						sendBytes([0x1B]);
+						return;
+					case 'Delete':
+						sendBytes([0x7F]);
+						return;
+				}
+				
+				// Printable characters: send but let input echo
+				if(e.key && e.key.length === 1){
+					const enc = new TextEncoder();
+					serialSocket.send(enc.encode(e.key));
+					return;
+				}
+			});
+
+
+			function appendSerial(data){
+				let text = '';
+				if(typeof data === 'string') text = data;
+				else if(data instanceof ArrayBuffer) text = serialDecoder.decode(new Uint8Array(data));
+				else text = String(data || '');
+
+				const atBottom = (serialLog.scrollTop + serialLog.clientHeight) >= (serialLog.scrollHeight - 8);
+				serialLog.textContent += text;
+				const maxLen = 24000;
+				if(serialLog.textContent.length > maxLen){
+					serialLog.textContent = serialLog.textContent.slice(serialLog.textContent.length - maxLen);
+				}
+				if(atBottom) serialLog.scrollTop = serialLog.scrollHeight;
+			}
+
+			function scheduleSerialReconnect(){
+				if(serialReconnect) clearTimeout(serialReconnect);
+				serialReconnect = setTimeout(connectSerialSocket, serialBackoff);
+				serialBackoff = Math.min(Math.round(serialBackoff * 1.6), 6000);
+			}
+
+			function teardownSerialSocket(){
+				if(serialReconnect){ clearTimeout(serialReconnect); serialReconnect = null; }
+				if(serialSocket){
+					serialSocket.onopen = null;
+					serialSocket.onmessage = null;
+					serialSocket.onclose = null;
+					serialSocket.onerror = null;
+					try{ serialSocket.close(); }catch(e){}
+					serialSocket = null;
+				}
+			}
+
+			function connectSerialSocket(){
+				teardownSerialSocket();
+				const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+				try{
+					serialSocket = new WebSocket(proto + '://' + location.host + '/serial');
+					serialSocket.binaryType = 'arraybuffer';
+				} catch(e){
+					scheduleSerialReconnect();
+					return;
+				}
+				serialSocket.onopen = ()=>{ serialBackoff = 500; };
+				serialSocket.onmessage = (ev)=>{ appendSerial(ev.data); };
+				serialSocket.onclose = ()=>{ scheduleSerialReconnect(); };
+				serialSocket.onerror = ()=>{ if(serialSocket) serialSocket.close(); };
+			}
+
+			// Drag/drop handlers
+			['dragenter','dragover'].forEach(ev=> drop.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); drop.classList.add('drag'); }));
+			drop.addEventListener('dragleave', e=>{ e.preventDefault(); e.stopPropagation(); drop.classList.remove('drag'); });
+			drop.addEventListener('dragend', e=>{ e.preventDefault(); e.stopPropagation(); drop.classList.remove('drag'); });
+			drop.addEventListener('drop', e=>{
+                
+				e.preventDefault(); e.stopPropagation();
+				const files = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files : [];
+				if(files && files.length > 1){ showUploadError('Only one file can be uploaded at a time'); return; }
+				handleFiles(files);
+				drop.classList.remove('drag');
+			});
+
+			drop.addEventListener('click', ()=> { fileInput.click(); });
+			fileInput.addEventListener('change', ()=> {
+                
+				const files = fileInput.files || [];
+				if(files.length > 1){ showUploadError('Only one file can be uploaded at a time'); return; }
+				handleFiles(files);
+			});
+
+			function handleFiles(list){
+                
+				const count = list && typeof list.length === 'number' ? list.length : 0;
+				if(count === 0) return;
+				if(count > 1){ showUploadError('Only one file can be uploaded at a time'); return; }
+				const file = list[0];
+				if(file) {
+					if(!file.name.toLowerCase().endsWith('.bin')) {
+						showUploadError('Only .bin files are accepted.');
+						return;
+					}
+					uploadFile(file);
+				}
+			}
+
+			function showUploadError(msg){
+				try{
+					const inner = el('uploadError');
+					const overlay = document.querySelector('.upload-error-overlay');
+					if(!overlay || !inner) return;
+					inner.textContent = msg;
+					overlay.style.display = 'flex';
+					drop.classList.add('error');
+					setTimeout(()=>{ overlay.style.display = 'none'; drop.classList.remove('error'); inner.textContent = ''; }, 4200);
+				} catch(e){}
+			}
+
+			function uploadFile(file){
+				// Reset progress/result
+				uploadProgressWrap.style.display = 'block';
+				uploadProgressBar.style.width = '0%';
+				uploadProgressText.textContent = '';
+				uploadResult.textContent = '';
+				filesList.innerHTML = '';
+
+				const form = new FormData();
+				form.append('file', file, file.name);
+				form.append('target', store.value);
+
+				const xhr = new XMLHttpRequest();
+				xhr.open('POST', '/upload?target=' + encodeURIComponent(store.value));
+				xhr.upload.addEventListener('progress', (ev)=>{
+					if(ev.lengthComputable){
+						const pct = Math.round(ev.loaded / ev.total * 100);
+						uploadProgressBar.style.width = pct + '%';
+						uploadProgressText.textContent = pct + '%';
+					}
+				});
+				xhr.onreadystatechange = ()=>{
+					if(xhr.readyState===4){
+						let ok = false, msg = '';
+						try{
+							const j = JSON.parse(xhr.responseText||'{}');
+							ok = xhr.status>=200 && xhr.status<300 && j.success;
+							msg = ok ? 'Upload succeeded' : (j && j.error ? j.error : 'Upload failed');
+						}catch(e){ msg = 'Upload failed'; }
+						uploadProgressBar.style.width = ok ? '100%' : '0%';
+						uploadResult.textContent = msg;
+						uploadResult.style.color = ok ? '#aaffcc' : '#ffb4b4';
+						uploadProgressText.textContent = '';
+						setTimeout(()=>{ uploadProgressWrap.style.display = 'none'; }, 1200);
+					}
+				};
+				xhr.send(form);
+			}
+
+			connectSerialSocket();
+
+			function pollReachability(){
+				// Ping server; show overlay if unreachable or non-OK
+				fetch('/status', {cache:'no-store'}).then(r=>{
+					if(r && r.ok) {
+						offlineOverlay.setAttribute('hidden','');
+						// Check mode and hide WiFi card if in access mode
+						r.json().then(data => {
+							if(data && data.mode === 'access') {
+								wifiSection.style.display = 'none';
+							}
+						}).catch(()=>{});
+					}
+					else offlineOverlay.removeAttribute('hidden');
+				}).catch(()=>{
+					offlineOverlay.removeAttribute('hidden');
+				}).finally(()=>{
+					reachabilityTimer = setTimeout(pollReachability, 2000);
+				});
+			}
+			pollReachability();
+
+			function el(id){ return document.getElementById(id); }
+		})();
+	</script>
+</body>
+</html>
