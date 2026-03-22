@@ -1,6 +1,7 @@
 
 module spi(
-    input              clk,          // System clock
+    input              clk_in,       // 27 MHz reference clock for SPI engine PLL
+    input              clk,         // System clock
     input              reset_n,      // Active low reset
     input              spi_cs,       // SPI chip select (active low)
     input              spi_clk,      // SPI clock
@@ -15,7 +16,14 @@ module spi(
     input  wire [3:0]  mem_wstrb,      // byte enables; 0 => read
 
     output wire        mem_ready,
-    output wire [31:0] mem_rdata
+    output wire [31:0] mem_rdata,
+    output wire [3:0]  leds
+);
+
+wire clk_spi_fast;
+Gowin_rPLL1 spi_fast_pll(
+    .clkout(clk_spi_fast),
+    .clkin(clk_in)
 );
 
 // Port A is attached to the picorv32 memory bus.
@@ -57,56 +65,57 @@ reg        spi_in_wrea;
 reg [7:0]  spi_in_ada;
 reg [7:0]  spi_in_dina;
 wire [7:0] spi_in_douta;
-reg        spi_in_ceb;
-reg        spi_in_wreb;
-reg [7:0]  spi_in_adb;
-reg [7:0]  spi_in_dinb;
 
 reg        spi_out_cea;
 reg        spi_out_wrea;
 reg [7:0]  spi_out_ada;
 reg [7:0]  spi_out_dina;
 wire [7:0] spi_out_douta;
-reg        spi_out_ceb;
-reg [7:0]  spi_out_adb;
 
 wire [7:0] spi_in_doutb;
 wire [7:0] spi_out_doutb;
 
-// SPI slave (mode 0): sample MOSI on rising edge, update MISO on falling edge.
-// Use 3-stage synchronizers for CDC robustness:
-//   stage0 catches metastability, stage1 is synchronized signal,
-//   stage2 is previous stage1 value for edge detection.
-reg [2:0] spi_clk_sync;
-reg [2:0] spi_cs_sync;
+// ---------------------------------------------------------------------------
+// SPI engine runs entirely in the clk_spi_fast domain.
+// 3-stage synchronizers bring the raw pins into that domain.
+// Edge detectors look at stages [2:1].
+// ---------------------------------------------------------------------------
+reg [2:0] sck_sync;    // clk_spi_fast domain SCK synchronizer
+reg [2:0] cs_sync;     // clk_spi_fast domain CS  synchronizer
+reg [2:0] mosi_sync;   // clk_spi_fast domain MOSI synchronizer
 
-reg       spi_active;
-reg [2:0] spi_bit_cnt;
-reg [7:0] spi_byte_cnt;
-reg [2:0] rx_bit_cnt;
-reg [7:0] rx_byte_cnt;
-reg [7:0] rx_shift;
-reg [7:0] tx_shift;
-reg       spi_miso_reg;
-reg [7:0] tx_first_byte;
+wire sck_rise = (sck_sync[2:1] == 2'b01);
+wire sck_fall = (sck_sync[2:1] == 2'b10);
+wire cs_fall  = (cs_sync[2:1]  == 2'b10);  // CS active-low: 1->0 = start
+wire cs_rise  = (cs_sync[2:1]  == 2'b01);  // CS active-low: 0->1 = end
+wire cs_active = !cs_sync[1];
 
-reg       rx_write_pending;
+// SPI FSM state
+reg       spi_dummy;           // 1 while receiving the dummy byte
+reg       dummy_done_pending;  // set at rise 8 (end of dummy); triggers MISO reload at fall 8
+reg [2:0] spi_bit_cnt;         // bit counter within current byte (0-7)
+reg [7:0] spi_byte_cnt;        // byte counter within payload (0-255)
+reg [7:0] rx_shift;            // MOSI shift register
+reg [7:0] tx_shift;            // MISO shift register
+reg       spi_miso_reg;        // registered MISO output
+
+// RX byte-write handshake to BRAM Port B (clk_spi_fast drives BRAM-B directly)
+reg       rx_write_en;     // one-cycle write strobe into spi_in BRAM
 reg [7:0] rx_write_addr;
 reg [7:0] rx_write_data;
 
-reg [2:0] spi_mosi_sync;
-
-reg       tx_read_pending;
-reg       tx_read_wait;
-reg       tx_read_wait2;
+// TX pre-fetch: clk_spi_fast reads spi_out BRAM Port B directly.
+// tx_read_req is a one-cycle strobe; the BRAM has registered outputs so
+// the data appears 2 clk_spi_fast cycles later (READ_MODE1 => registered).
+reg       tx_read_req;     // strobe: present tx_read_addr to BRAM-B
 reg [7:0] tx_read_addr;
-reg [7:0] tx_next_byte;
-reg       tx_next_valid;
-reg       tx_load_first;
+reg [1:0] tx_read_dly;    // 2-cycle pipeline to capture registered BRAM output
+reg [7:0] tx_next_byte;    // buffered next TX byte
+reg       tx_next_valid;   // tx_next_byte is valid
 
 assign mem_ready = mem_ready_lat;
 assign mem_rdata = rdata_lat;
-assign spi_miso  = spi_miso_reg;
+assign spi_miso  = cs_sync[1] ? 1'bz : spi_miso_reg;  // tri-state when CS inactive
 
 always @(*) begin
     spi_in_cea   = 1'b0;
@@ -119,19 +128,8 @@ always @(*) begin
     spi_out_ada  = busy ? bram_addr_busy : mem_addr[7:0];
     spi_out_dina = phase_wbyte;
 
-    spi_in_ceb   = 1'b0;
-    spi_in_wreb  = 1'b0;
-    spi_in_adb   = 8'b0;
-    spi_in_dinb  = 8'b0;
-
-    spi_out_ceb  = 1'b0;
-    spi_out_adb  = 8'b0;
-
-    // Memory-side Port A access
+    // Memory-side Port A access (clk domain only)
     if (busy) begin
-        // For reads (2-cycle latency): enable BRAM only for steps 1-3.
-        // Steps 4-5 are capture-only cycles.
-        // For writes: enable BRAM for steps 0-3
         if (!op_write && (step == 3'd4 || step == 3'd5)) begin
             // Capture-only read steps: don't present new address
         end else begin
@@ -144,7 +142,6 @@ always @(*) begin
             end
         end
     end else if (req_any && !(|mem_wstrb)) begin
-        // For reads: pre-fetch byte 0 while still in !busy state
         if (req_in) begin
             spi_in_cea  = 1'b1;
         end else begin
@@ -152,22 +149,16 @@ always @(*) begin
         end
     end
 
-    // SPI-side BRAM Port B access in clk domain.
-    if (tx_read_pending && spi_active) begin
-        spi_out_ceb = 1'b1;
-        spi_out_adb = tx_read_addr;
-    end
-
-    // Do not gate RX writes with spi_active: byte 0 can arrive before the
-    // clk-domain CS synchronizer asserts spi_active.
-    if (rx_write_pending) begin
-        spi_in_ceb  = 1'b1;
-        spi_in_wreb = 1'b1;
-        spi_in_adb  = rx_write_addr;
-        spi_in_dinb = rx_write_data;
-    end
+    // NOTE: BRAM Port B (spi_in_ceb/wreb, spi_out_ceb) is driven from the
+    // clk_spi_fast always block below via the registered signals
+    // rx_write_en / tx_read_req.  The combinational block above only drives
+    // Port A and must leave Port B signals at their defaults (0) here so
+    // that the clk_spi_fast domain has exclusive control over Port B.
 end
 
+// ---------------------------------------------------------------------------
+// clk domain: CPU memory-bus state machine only.
+// ---------------------------------------------------------------------------
 always @(posedge clk) begin
     if (!reset_n) begin
         busy           <= 1'b0;
@@ -179,62 +170,13 @@ always @(posedge clk) begin
         target_in_lat  <= 1'b0;
         rdata_lat      <= 32'b0;
         mem_ready_lat  <= 1'b0;
-        spi_clk_sync   <= 3'b000;
-        spi_cs_sync    <= 3'b111;
-        spi_mosi_sync  <= 3'b000;
-        spi_active     <= 1'b0;
-        spi_bit_cnt    <= 3'b000;
-        spi_byte_cnt   <= 8'b0;
-        rx_bit_cnt     <= 3'b000;
-        rx_byte_cnt    <= 8'b0;
-        rx_shift       <= 8'b0;
-        tx_shift       <= 8'b0;
-        spi_miso_reg   <= 1'b0;
-        tx_first_byte  <= 8'b0;
-        rx_write_pending <= 1'b0;
-        rx_write_addr    <= 8'b0;
-        rx_write_data    <= 8'b0;
-        tx_read_pending <= 1'b0;
-        tx_read_wait    <= 1'b0;
-        tx_read_wait2   <= 1'b0;
-        tx_read_addr    <= 8'b0;
-        tx_next_byte    <= 8'b0;
-        tx_next_valid   <= 1'b0;
-        tx_load_first   <= 1'b0;
     end else begin
         mem_ready_lat <= 1'b0;
 
-        // BRAM Port B write pulse is one clk wide.
-        if (rx_write_pending)
-            rx_write_pending <= 1'b0;
-
-        // Keep RX state aligned to synchronized CS and ignore SCLK activity
-        // while CS is inactive-high.
-        if (spi_cs_sync[2:1] == 2'b10 || spi_cs_sync[2:1] == 2'b01) begin
-            rx_bit_cnt  <= 3'b000;
-            rx_byte_cnt <= 8'b0;
-            rx_shift    <= 8'b0;
-        end else if (!spi_cs_sync[1] && spi_clk_sync[2:1] == 2'b01) begin
-            rx_shift <= {rx_shift[6:0], spi_mosi_sync[1]};
-            if (rx_bit_cnt == 3'b111) begin
-                rx_bit_cnt       <= 3'b000;
-                rx_write_pending <= 1'b1;
-                rx_write_addr    <= rx_byte_cnt;
-                rx_write_data    <= {rx_shift[6:0], spi_mosi_sync[1]};
-                if (rx_byte_cnt != 8'hFF)
-                    rx_byte_cnt <= rx_byte_cnt + 8'h01;
-            end else begin
-                rx_bit_cnt <= rx_bit_cnt + 3'b001;
-            end
-        end
-
-        // Memory interface state machine
         if (!busy) begin
             if (req_any) begin
                 busy          <= 1'b1;
                 op_write      <= |mem_wstrb;
-                // Writes: step starts at 0 (present+write byte 0 this cycle)
-                // Reads:  step starts at 1 (prefetch at !busy already presented addr+0)
                 step          <= (|mem_wstrb) ? 3'd0 : 3'd1;
                 base_addr     <= mem_addr[7:0];
                 wdata_lat     <= mem_wdata;
@@ -244,17 +186,6 @@ always @(posedge clk) begin
         end else begin
             step <= step + 3'd1;
 
-            // Keep a local copy of SPI_out byte 0 so a new SPI transaction can
-            // start transmitting immediately without waiting for a BRAM read.
-            if (op_write && !target_in_lat && phase_strb && (bram_addr_busy == 8'h00)) begin
-                tx_first_byte <= phase_wbyte;
-            end
-
-            // Capture read data from PREVIOUS address (READ_MODE0=1 => 2-cycle latency)
-            // prefetch addr+0 -> capture at step 2
-            // step 1 addr+1    -> capture at step 3
-            // step 2 addr+2    -> capture at step 4
-            // step 3 addr+3    -> capture at step 5
             if (!op_write) begin
                 case (step)
                     3'd2: rdata_lat[7:0]   <= target_in_lat ? spi_in_douta : spi_out_douta;
@@ -264,111 +195,160 @@ always @(posedge clk) begin
                 endcase
             end
 
-            // Complete: writes at step 3, reads at step 5 (all 4 bytes captured)
             if ((op_write && step == 3'd3) || (!op_write && step == 3'd5)) begin
                 busy          <= 1'b0;
                 mem_ready_lat <= 1'b1;
                 step          <= 3'd0;
             end
         end
+    end
+end
 
-        // Synchronize SPI pins into clk domain.
-        spi_clk_sync  <= {spi_clk_sync[1:0], spi_clk};
-        spi_cs_sync   <= {spi_cs_sync[1:0], spi_cs};
-        spi_mosi_sync <= {spi_mosi_sync[1:0], spi_mosi};
+// ---------------------------------------------------------------------------
+// clk_spi_fast domain: synchronizers, SPI FSM, MISO/MOSI logic.
+//
+// Protocol:
+//   - CS falls  -> enter DUMMY phase (spi_dummy=1) and begin a BRAM read of
+//                  spi_out[0].
+//   - DUMMY phase lasts exactly 8 SCK cycles (one byte).  MOSI is ignored
+//     and rx counters are not advanced.
+//   - After dummy byte completes -> on the next falling edge, load the BRAM
+//     result for spi_out[0] into tx_shift so the first payload sample sees
+//     the correct MSB. At that same moment, request spi_out[1].
+//   - From there MOSI is captured to spi_in and MISO shifts spi_out bytes.
+//   - CS rises  -> end transaction, tri-state MISO.
+//
+// BRAM Port B clock is clk_spi_fast; registered output mode means data
+// appears 2 clk_spi_fast cycles after the read strobe.
+// ---------------------------------------------------------------------------
+always @(posedge clk_spi_fast or negedge reset_n) begin
+    if (!reset_n) begin
+        sck_sync      <= 3'b000;
+        cs_sync       <= 3'b111;  // CS inactive-high at reset
+        mosi_sync     <= 3'b000;
+        spi_dummy          <= 1'b0;
+        dummy_done_pending <= 1'b0;
+        spi_bit_cnt        <= 3'b000;
+        spi_byte_cnt       <= 8'b0;
+        rx_shift           <= 8'b0;
+        tx_shift           <= 8'b0;
+        spi_miso_reg       <= 1'b0;
+        rx_write_en        <= 1'b0;
+        rx_write_addr <= 8'b0;
+        rx_write_data <= 8'b0;
+        tx_read_req   <= 1'b0;
+        tx_read_addr  <= 8'b0;
+        tx_read_dly   <= 2'b00;
+        tx_next_byte  <= 8'b0;
+        tx_next_valid <= 1'b0;
+    end else begin
+        // Advance synchronizers
+        sck_sync  <= {sck_sync[1:0],  spi_clk};
+        cs_sync   <= {cs_sync[1:0],   spi_cs};
+        mosi_sync <= {mosi_sync[1:0], spi_mosi};
 
-        // SPI_out Port B uses registered output, so capture data two cycles
-        // after the read strobe has been issued.
-        if (tx_read_wait2) begin
+        // Clear one-cycle strobes
+        rx_write_en <= 1'b0;
+        tx_read_req <= 1'b0;
+
+        // BRAM registered-output pipeline: data valid 2 cycles after read strobe
+        tx_read_dly <= {tx_read_dly[0], tx_read_req};
+        if (tx_read_dly[1]) begin
             tx_next_byte  <= spi_out_doutb;
             tx_next_valid <= 1'b1;
         end
 
-        if (tx_read_pending) begin
-            tx_read_pending <= 1'b0;
-            tx_read_wait <= 1'b1;
-            tx_read_wait2 <= 1'b0;
-        end else if (tx_read_wait) begin
-            tx_read_wait <= 1'b0;
-            tx_read_wait2 <= 1'b1;
-        end else begin
-            tx_read_wait <= 1'b0;
-            tx_read_wait2 <= 1'b0;
+        // ---- CS FALL: start of new transaction --------------------------------
+        if (cs_fall) begin
+            spi_dummy          <= 1'b1;    // enter dummy-byte phase
+            dummy_done_pending <= 1'b0;
+            spi_bit_cnt        <= 3'b000;
+            spi_byte_cnt       <= 8'b0;
+            rx_shift           <= 8'b0;
+            tx_shift           <= 8'b0;
+            spi_miso_reg       <= 1'b0;
+            tx_next_valid      <= 1'b0;
+            // Pre-fetch spi_out[0] during dummy phase so that the first real
+            // payload byte comes from BRAM, not from a clk-domain shadow copy.
+            tx_read_addr  <= 8'h00;
+            tx_read_req   <= 1'b1;
         end
 
-        // Start a new 256-byte transaction on CS falling edge.
-        if (spi_cs_sync[2:1] == 2'b10) begin
-            spi_active      <= 1'b1;
-            spi_bit_cnt     <= 3'b000;
-            spi_byte_cnt    <= 8'b0;
-            tx_shift        <= tx_first_byte;
-            spi_miso_reg    <= tx_first_byte[7];
-            tx_read_addr    <= 8'h01;
-            tx_read_pending <= 1'b1;
-            tx_read_wait    <= 1'b0;
-            tx_read_wait2   <= 1'b0;
-            tx_next_valid   <= 1'b0;
-            tx_load_first   <= 1'b0;
+        // ---- CS RISE: end of transaction --------------------------------------
+        if (cs_rise) begin
+            spi_dummy          <= 1'b0;
+            dummy_done_pending <= 1'b0;
+            spi_bit_cnt        <= 3'b000;
+            spi_byte_cnt       <= 8'b0;
+            tx_next_valid      <= 1'b0;
         end
 
-        // End transaction on CS rising edge.
-        if (spi_cs_sync[2:1] == 2'b01) begin
-            spi_active      <= 1'b0;
-            tx_read_pending <= 1'b0;
-            tx_read_wait    <= 1'b0;
-            tx_read_wait2   <= 1'b0;
-            tx_next_valid   <= 1'b0;
-            tx_load_first   <= 1'b0;
-            spi_bit_cnt     <= 3'b000;
-            spi_byte_cnt    <= 8'b0;
-        end
+        // ---- SCK RISING EDGE: sample MOSI, advance RX -------------------------
+        if (sck_rise && cs_active) begin
+            rx_shift <= {rx_shift[6:0], mosi_sync[1]};
 
-        if (spi_active) begin
-            // Arm the first transmit byte as soon as the first BRAM read returns.
-            if (tx_load_first && tx_next_valid) begin
-                tx_shift      <= tx_next_byte;
-                spi_miso_reg  <= tx_next_byte[7];
-                tx_next_valid <= 1'b0;
-                tx_load_first <= 1'b0;
-                tx_read_addr  <= 8'h01;
-                tx_read_pending <= 1'b1;
-            end
+            if (spi_bit_cnt == 3'b111) begin
+                // Byte complete
+                spi_bit_cnt <= 3'b000;
 
-            // Detect SPI clock edges after synchronization.
-            if (spi_clk_sync[2:1] == 2'b01) begin
-                if (spi_bit_cnt == 3'b111) begin
-                    spi_bit_cnt <= 3'b000;
-
-                    if (spi_byte_cnt != 8'hFF) begin
+                if (spi_dummy) begin
+                    // Dummy byte done -> switch to payload.
+                    // Set flag so the very next SCK fall reloads tx_shift
+                    // for the first real payload byte instead of shifting.
+                    spi_dummy          <= 1'b0;
+                    dummy_done_pending <= 1'b1;
+                    spi_byte_cnt       <= 8'b0;
+                    rx_shift           <= 8'b0;
+                end else begin
+                    // Payload byte complete: write to spi_in BRAM
+                    rx_write_en   <= 1'b1;
+                    rx_write_addr <= spi_byte_cnt;
+                    rx_write_data <= {rx_shift[6:0], mosi_sync[1]};
+                    if (spi_byte_cnt != 8'hFF)
                         spi_byte_cnt <= spi_byte_cnt + 8'h01;
 
-                        // Load byte for next transfer chunk.
-                        if (tx_next_valid) begin
-                            tx_shift      <= tx_next_byte;
-                            spi_miso_reg  <= tx_next_byte[7];
-                            tx_next_valid <= 1'b0;
-                        end
-
-                        // Request following byte from SPI_out memory.
-                        if (spi_byte_cnt < 8'hFE) begin
-                            tx_read_addr    <= spi_byte_cnt + 8'h02;
-                            tx_read_pending <= 1'b1;
-                        end
+                    // Load next TX byte if available
+                    if (tx_next_valid) begin
+                        tx_shift      <= tx_next_byte;
+                        spi_miso_reg  <= tx_next_byte[7];
+                        tx_next_valid <= 1'b0;
                     end
-                end else begin
-                    spi_bit_cnt <= spi_bit_cnt + 3'b001;
+
+                    // Pre-fetch the byte after next from spi_out
+                    // (spi_byte_cnt still holds current byte index here)
+                    if (spi_byte_cnt < 8'hFE) begin
+                        tx_read_addr <= spi_byte_cnt + 8'h02;
+                        tx_read_req  <= 1'b1;
+                    end
                 end
-            end else if (spi_clk_sync[2:1] == 2'b10) begin
-                // Falling edge: shift data to present next MISO bit.
-                if (!tx_load_first) begin
-                    tx_shift <= {tx_shift[6:0], 1'b0};
-                    spi_miso_reg <= tx_shift[6];
-                end
+            end else begin
+                spi_bit_cnt <= spi_bit_cnt + 3'b001;
+            end
+        end
+
+        // ---- SCK FALLING EDGE: update MISO -----------------------------------
+        if (sck_fall && cs_active) begin
+            if (dummy_done_pending) begin
+                // Fall 8: the transition fall between dummy and payload.
+                // Load spi_out[0] that was fetched from BRAM during the dummy
+                // byte so rise 9 sees the correct MSB of byte 0.
+                tx_shift           <= tx_next_byte;
+                spi_miso_reg       <= tx_next_byte[7];
+                tx_next_valid      <= 1'b0;
+                dummy_done_pending <= 1'b0;
+
+                // Start fetching spi_out[1] now that byte 0 has been loaded.
+                tx_read_addr       <= 8'h01;
+                tx_read_req        <= 1'b1;
+            end else begin
+                tx_shift     <= {tx_shift[6:0], 1'b0};
+                spi_miso_reg <= tx_shift[6];
             end
         end
     end
 end
 
+// BRAM Port A: clk domain (CPU bus).  Port B: clk_spi_fast domain (SPI engine).
 SPI_in spi_in(
     .douta(spi_in_douta),
     .doutb(spi_in_doutb),
@@ -377,15 +357,15 @@ SPI_in spi_in(
     .cea(spi_in_cea),
     .reseta(1'b0),
     .wrea(spi_in_wrea),
-    .clkb(clk),
+    .clkb(clk_spi_fast),
     .oceb(1'b1),
-    .ceb(spi_in_ceb),
+    .ceb(rx_write_en),
     .resetb(1'b0),
-    .wreb(spi_in_wreb),
+    .wreb(rx_write_en),
     .ada(spi_in_ada),
     .dina(spi_in_dina),
-    .adb(spi_in_adb),
-    .dinb(spi_in_dinb)
+    .adb(rx_write_addr),
+    .dinb(rx_write_data)
 );
 
 SPI_out spi_out(
@@ -396,14 +376,14 @@ SPI_out spi_out(
     .cea(spi_out_cea),
     .reseta(1'b0),
     .wrea(spi_out_wrea),
-    .clkb(clk),
+    .clkb(clk_spi_fast),
     .oceb(1'b1),
-    .ceb(spi_out_ceb),
+    .ceb(tx_read_req),
     .resetb(1'b0),
     .wreb(1'b0),
     .ada(spi_out_ada),
     .dina(spi_out_dina),
-    .adb(spi_out_adb),
+    .adb(tx_read_addr),
     .dinb(8'b0)
 );
 

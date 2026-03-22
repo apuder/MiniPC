@@ -316,6 +316,7 @@ end
       );
 
   spi spi(
+    .clk_in(clk_in),
     .clk(clk),          // System clock
     .reset_n(reset_n),  // Active low reset
     .spi_cs(CS_FPGA),   // SPI chip select (active low)

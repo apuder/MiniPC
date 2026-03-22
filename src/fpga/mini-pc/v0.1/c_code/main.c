@@ -28,23 +28,65 @@ typedef struct __attribute__((packed)) {
   unsigned int v3;
 } test_t;
 
-void spi_test()
+void (*func_ptr)(void);
+
+static inline void esp_request(volatile unsigned char* esp, unsigned char cmd)
+{
+  *esp = cmd;
+  while (*esp == 0) ;
+}
+
+void load_kernel()
 {
   volatile unsigned char* spi_out = (unsigned char*) 0x80001100;
-  for (int i = 0; i < 256; i++) {
-    *(spi_out + i) = i % 10;
-  }
   volatile unsigned char* spi_in = (unsigned char*) 0x80001000;
-  *spi_in = 0x42;
-  // Signal ESP to perform a SPI transaction
   volatile unsigned char* esp = (unsigned char*) 0x80002000;
-  *esp = 3;
-  // Busy wait for ESP to finish SPI transaction
-  while (*esp == 0) ;
-  for (int i = 0; i < 256; i++) {
-    uart_print_hex(*(spi_in + i));
-    uart_puts("\r\n");
+  *spi_out = 1; // Open kernel.bin
+  esp_request(esp, 3);
+  *spi_out = 0; // NOP, fetch results of open
+  esp_request(esp, 3);
+
+  uart_puts("spi_in[0..7]: ");
+  for (int i = 0; i < 8; i++) {
+    uart_print_hex(spi_in[i]);
+    uart_puts(i == 7 ? "\r\n" : " ");
   }
+
+  unsigned char err = *spi_in;
+  if (err) {
+    uart_puts("Error opening kernel.bin\r\n");
+    return;
+  }
+  int size =
+      ((int)spi_in[1]) |
+      ((int)spi_in[2] << 8) |
+      ((int)spi_in[3] << 16) |
+      ((int)spi_in[4] << 24);
+  uart_puts("kernel.bin size: ");
+  uart_print_hex(size);
+  uart_puts("\r\n");
+  if (size == 0) {
+    return;
+  }
+
+  *spi_out = 2; // Read next 256 bytes of kernel.bin
+  // First response will be empty
+  esp_request(esp, 3);
+
+  volatile unsigned char* p = (unsigned char*) 0x40000000;
+
+  while(size > 0) {
+    esp_request(esp, 3);
+    int max = size > 256 ? 256 : size;
+    for (int i = 0; i < max; i++) {
+      *p++ = *(spi_in + i);
+    }
+    size -= max;
+  }
+
+  uart_puts("kernel.bin loaded to 0x40000000\r\n");
+  func_ptr = (void (*)(void)) 0x40000000;
+  func_ptr();
 }
 
 int mem_test (void)
@@ -354,7 +396,7 @@ int main()
     uart_puts("   l: set RGB LED\r\n");
     uart_puts("   m: memory test\r\n");
     uart_puts("   r: read clock\r\n");
-    uart_puts("   s: SPI test\r\n");
+    uart_puts("   k: load kernel.bin\r\n");
     ch = uart_getchar();
     switch (ch) {
     case 'c':
@@ -393,8 +435,8 @@ int main()
       uart_print_hex(readtime());
       uart_puts("\r\n");
       break;
-    case 's':
-      spi_test();
+    case 'k':
+      load_kernel();
       break;
     default:
       uart_puts("  Try again...\r\n");

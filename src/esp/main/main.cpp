@@ -24,6 +24,7 @@
 #include "http_server_handlers.h"
 #include "fpga.h"
 #include "spi.h"
+#include "fat.h"
 
 static const char *TAG = "Programmer-20K";
 
@@ -34,11 +35,16 @@ extern "C" void app_main(void)
     init_button();
     init_led();
     init_spi();
+    init_fat();
     init_fpga();
     JTAGAdapter* jtag = new JTAGAdapter();
     // Section 2.2.5, IDCODE for GW2A(R)-18
     int err = jtag->scan(8, 1, 0x0000081B);
-    ESP_LOGE("JTAG", "Scan result: %d", err);
+    if (err != 0) {
+        ESP_LOGE(TAG, "JTAG scan failed with error code %d", err);
+    } else {
+        ESP_LOGI(TAG, "JTAG scan successful, device detected with correct IDCODE");
+    }
     delete jtag;
 
     start_http_server();

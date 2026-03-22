@@ -6,6 +6,9 @@
 #include "esp_log.h"
 #include "rom/ets_sys.h"
 
+#include <cstdint>
+#include <cstring>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -29,26 +32,75 @@ void IRAM_ATTR req_isr_handler(void* arg) {
 
 void fpga_event_task(void* arg) {
 	uint32_t event = 0;
+	FILE* f = nullptr;
+
 	while (true) {
 		if (xQueueReceive(fpga_req_queue, &event, portMAX_DELAY) == pdTRUE) {
             // Got a request from the FPGA
             uint8_t* out = get_spi_out_buffer();
             uint8_t* in = get_spi_in_buffer();
-            // Fill out buffer with some data
-            for (int i = 0; i < 256; i++) {
-                out[i] = 10 + i % 10;
-            }
-            // Transmit data over SPI
+			if (out == nullptr || in == nullptr) {
+				ESP_LOGE(TAG, "SPI buffers not initialized");
+				continue;
+			}
             spi_transmit();
+			ESP_LOGI(TAG, "Received request: %d", *in);
+			switch(*in) {
+				case 0:
+				  // NOP
+				  break;
+				case 1:
+				  // Open kernel.img from SD card and prepare it for transfer to FPGA
+				  f = fopen("/sdcard/kernel.bin", "rb");
+				  *out = (f != nullptr) ? 0 : 1; // Return 0 on success, 1 on failure
+				  if (f == nullptr) {
+					ESP_LOGE(TAG, "Failed to open kernel.bin");
+				  } else {
+	    			  if (fseek(f, 0, SEEK_END) != 0) {
+						ESP_LOGE(TAG, "fseek(SEEK_END) failed");
+						fclose(f);
+						f = nullptr;
+						*out = 1;
+				      } else {
+						long size = ftell(f);
+						if (size < 0 || fseek(f, 0, SEEK_SET) != 0) {
+							ESP_LOGE(TAG, "ftell/fseek(SEEK_SET) failed");
+							fclose(f);
+							f = nullptr;
+							*out = 1;
+						} else {
+							ESP_LOGI(TAG, "kernel.bin size: %u bytes", (unsigned)size);
+							uint32_t size32 = static_cast<uint32_t>(size);
+							std::memcpy(out + 1, &size32, sizeof(size32));
+						}
+				      }
+				  }
+				  break;
+				case 2:
+				  // Read up to 256 bytes from kernel.bin and prepare it for transfer to FPGA
+				  if (f == nullptr) {
+					ESP_LOGE(TAG, "kernel.bin not opened");
+					memset(out, 0, 256);
+				  } else {
+					size_t bytesRead = fread(out, 1, 256, f);
+					ESP_LOGW(TAG, "Read %d bytes from kernel.bin", bytesRead);
+					if (bytesRead < 256) {
+						ESP_LOGI(TAG, "Reached end of kernel.bin, closing file");
+						memset(out + bytesRead, 0, 256 - bytesRead); // Pad remaining bytes with zeros
+						fclose(f);
+						f = nullptr;
+					}
+				  }
+				  break;
+				default:
+				  ESP_LOGW(TAG, "Unknown request received from FPGA: %d", *in);
+				  memset(out, 0, 256);
+				  break;
+			}
             // Signal to FPGA that data is ready
 			gpio_set_level(DONE, 1);
 			ets_delay_us(1);
 			gpio_set_level(DONE, 0);
-            // Log the received data for debugging
-            ESP_LOGI(TAG, "Received request from FPGA, sent response:");
-            for (int i = 0; i < 256; i++) {
-                ESP_LOGI(TAG, "Response[%d]: %02X", i, in[i]);
-            }
 		}
 	}
 }
@@ -83,11 +135,15 @@ void init_fpga() {
 	gpio_config(&done_config);
 	gpio_set_level(DONE, 0);
 
-	esp_err_t ret = gpio_install_isr_service(0);
+	esp_err_t ret;
+#if 0
+    // Already initialized in init_button()
+	ret = gpio_install_isr_service(0);
 	if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
 		ESP_LOGE(TAG, "gpio_install_isr_service failed: %s", esp_err_to_name(ret));
 		return;
 	}
+#endif
 
 	ret = gpio_isr_handler_add(REQ, req_isr_handler, nullptr);
 	if (ret != ESP_OK) {
@@ -95,5 +151,5 @@ void init_fpga() {
 		return;
 	}
 
-	xTaskCreatePinnedToCore(fpga_event_task, "fpga_event", 2048, nullptr, 5, nullptr, tskNO_AFFINITY);
+	xTaskCreatePinnedToCore(fpga_event_task, "fpga_event", 4096, nullptr, 5, nullptr, tskNO_AFFINITY);
 }
