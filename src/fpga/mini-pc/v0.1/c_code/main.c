@@ -41,6 +41,19 @@ void load_kernel()
   volatile unsigned char* spi_out = (unsigned char*) 0x80001100;
   volatile unsigned char* spi_in = (unsigned char*) 0x80001000;
   volatile unsigned char* esp = (unsigned char*) 0x80002000;
+
+  for (int i = 0; i < 256; i++) {
+    spi_out[i] = 5 + i * 7 % 20;
+  }
+  esp_request(esp, 3);
+  for (int i = 0; i < 256; i++) {
+    uart_puts("SPI in[0x");
+    uart_print_hex(i);
+    uart_puts("]: 0x");
+    uart_print_hex(spi_in[i]);
+    uart_puts("\r\n");
+  }
+  #if 0
   *spi_out = 1; // Open kernel.bin
   esp_request(esp, 3);
   *spi_out = 0; // NOP, fetch results of open
@@ -87,6 +100,7 @@ void load_kernel()
   uart_puts("kernel.bin loaded to 0x40000000\r\n");
   func_ptr = (void (*)(void)) 0x40000000;
   func_ptr();
+  #endif
 }
 
 int mem_test (void)

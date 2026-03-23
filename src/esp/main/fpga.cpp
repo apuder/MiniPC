@@ -43,6 +43,14 @@ void fpga_event_task(void* arg) {
 				ESP_LOGE(TAG, "SPI buffers not initialized");
 				continue;
 			}
+			for (int i = 0; i < 256; i++) {
+				out[i] = 3 + i * 3 % 20;
+			}
+			spi_transmit();
+			for (int i = 0; i < 256; i++) {
+				ESP_LOGI(TAG, "SPI in[%d] = %d", i, in[i]);
+			}
+			#if 0
             spi_transmit();
 			ESP_LOGI(TAG, "Received request: %d", *in);
 			switch(*in) {
@@ -97,6 +105,7 @@ void fpga_event_task(void* arg) {
 				  memset(out, 0, 256);
 				  break;
 			}
+			#endif
             // Signal to FPGA that data is ready
 			gpio_set_level(DONE, 1);
 			ets_delay_us(1);

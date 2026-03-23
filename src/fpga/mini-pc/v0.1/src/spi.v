@@ -20,11 +20,8 @@ module spi(
     output wire [3:0]  leds
 );
 
-wire clk_spi_fast;
-Gowin_rPLL1 spi_fast_pll(
-    .clkout(clk_spi_fast),
-    .clkin(clk_in)
-);
+// Keep the SPI engine in the known-good system clock domain.
+wire clk_spi_fast = clk;
 
 // Port A is attached to the picorv32 memory bus.
 // PicoRV32 sends byte addresses. We sequence through 4 bytes starting from mem_addr.
