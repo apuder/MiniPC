@@ -45,6 +45,7 @@ void load_kernel()
   for (int i = 0; i < 256; i++) {
     spi_out[i] = 5 + i * 7 % 20;
   }
+  spi_out[0] = 0xa5;
   esp_request(esp, 3);
   for (int i = 0; i < 256; i++) {
     uart_puts("SPI in[0x");
