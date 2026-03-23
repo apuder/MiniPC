@@ -43,6 +43,7 @@ void fpga_event_task(void* arg) {
 				ESP_LOGE(TAG, "SPI buffers not initialized");
 				continue;
 			}
+#if 0
 			for (int i = 0; i < 256; i++) {
 				out[i] = 3 + i * 3 % 20;
 			}
@@ -50,7 +51,7 @@ void fpga_event_task(void* arg) {
 			for (int i = 0; i < 256; i++) {
 				ESP_LOGI(TAG, "SPI in[%d] = %d", i, in[i]);
 			}
-			#if 0
+#else
             spi_transmit();
 			ESP_LOGI(TAG, "Received request: %d", *in);
 			switch(*in) {
