@@ -6,27 +6,25 @@ include ../MakeVars
 %.o: %.c
 %.o: %.s
 
-OBJS = startup.o stdlib.o window.o process.o assert.o mem.o \
-       dispatch.o intr.o inout.o ipc.o com.o timer.o \
-       null.o keyb.o shell.o wm.o train.o pacman.o pong.o malloc.o \
-       vga.o
+OBJS = startup.o main.o uart.o
+
+#OBJS = startup.o stdlib.o window.o process.o assert.o mem.o \
+#       dispatch.o intr.o inout.o ipc.o com.o timer.o \
+#       null.o keyb.o shell.o wm.o train.o pacman.o pong.o malloc.o
 
 %.o: %.s
-	$(CC) $(CC_OPT) -o $@ -c $<
+	$(AS) $(ASFLAGS) -o $@ -c $<
 
 %.o: %.c .depend
-	$(CC) $(CC_OPT) -o $@ -c $<
+	$(CC) $(CFLAGS) -o $@ -c $<
 
-all demo: lib.o main.o
-	$(LD) $(LD_OPT) -o ../tos-debug.img lib.o main.o
-	cp ../tos-debug.img ../tos.img
-	$(STRIP) --remove-section=.eh_frame ../tos.img
+all: kernel.bin
 
-lib.o: $(OBJS)
-	$(LD) $(LD_OPT) $(OBJS) -r -o lib.o
+kernel.elf: $(OBJS)
+	$(CC) $(CFLAGS) -Tlinker.ld -o kernel.elf $(OBJS) $(LIBS)
 
-lib: lib.o
-	cp lib.o ../lib/kernel.o
+kernel.bin: kernel.elf Makefile
+	$(OBJCOPY) kernel.elf -O binary kernel.bin
 
 disptable.c: gentable.cc
 	$(CPP_HOST) gentable.cc -o gentable

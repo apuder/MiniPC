@@ -1,18 +1,11 @@
+/* Copyright 2024 Grug Huhler.  License SPDX BSD-2-Clause.
+
+   This is a VERY incomplete startup sequence for C.  It fails to
+   do many things such as clear bss.
+*/
+
 .text
-
-	.align 4
-.globl _start
-.globl start
-
+.global _start
 _start:
-start:
-	movw $0x10,%ax
-	movw %ax,%ds
-	movw %ax,%es
-	movw %ax,%fs
-	movw %ax,%gs
-	movw %ax,%ss
-	movl $640 * 1024, %esp
+	lui x2, 0x40800  /* 0x40000000 + 8 * 1024 * 1024 */
 	call kernel_main
-L1:
-	jmp L1

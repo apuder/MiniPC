@@ -1,21 +1,24 @@
 
 #include <kernel.h>
+#include <uart.h>
+
+
+#if 0
 #include <vga.h>
 
 /* TOS_IFDEF vga */
 #include "vga_test.c"
 /* TOS_ENDIF vga */
+#endif
+
+#define CLK_FREQ 84000000
 
 void kernel_main()
 {
-    // this turns off the VGA hardware cursor
-    // otherwise we get an annoying, meaningless,
-    // blinking cursor in the middle of our screen
-    outportb(0x03D4, 0x0E);
-    outportb(0x03D5, 0xFF);
-    outportb(0x03D4, 0x0F);
-    outportb(0x03D5, 0xFF);
-
+  uart_set_div(CLK_FREQ/115200.0 + 0.5);
+  uart_puts("Hello TOS!\r\n");
+  while(1);
+#if 0
     init_process();
     init_dispatcher();
     init_ipc();
@@ -36,4 +39,5 @@ void kernel_main()
     /* TOS_ENDIF vga */
 
     become_zombie();
+#endif
 }
