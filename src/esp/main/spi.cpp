@@ -20,7 +20,7 @@ constexpr int SPI_DUMMY_BITS = 8;
 constexpr size_t SPI_DUMMY_BYTES = SPI_DUMMY_BITS / 8;
 constexpr size_t SPI_TRANSFER_SIZE = SPI_BUFFER_SIZE + SPI_DUMMY_BYTES;
 constexpr int SPI_TRANSFER_BITS = SPI_TRANSFER_SIZE * 8;
-constexpr int SPI_CLOCK_HZ = 20 * 1000 * 1000;
+constexpr int SPI_CLOCK_HZ = 5 * 1000 * 1000;
 
 const char* TAG = "SPI";
 

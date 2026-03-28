@@ -27,7 +27,7 @@ module spi(
 wire spi_fast_clk;
 
 Gowin_rPLL1 spi_fast_rpll(
-    .clkout(spi_fast_clk), // 270 MHz
+    .clkout(spi_fast_clk), // 81 MHz
     .clkin(clk_in)         // 27 MHz
 );
 

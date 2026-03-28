@@ -42,6 +42,6 @@
         <File path="src/ws2812b_tgt.v" type="file.verilog" enable="1"/>
         <File path="src/picorv32.cst" type="file.cst" enable="0"/>
         <File path="src/primer20k.cst" type="file.cst" enable="1"/>
-        <File path="src/picorv32.sdc" type="file.sdc" enable="0"/>
+        <File path="src/picorv32.sdc" type="file.sdc" enable="1"/>
     </FileList>
 </Project>
