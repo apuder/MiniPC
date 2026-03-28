@@ -102,7 +102,7 @@ always @(posedge clk) begin
 end
 
 
-wire   opreg_80_64_n  = 1'b0;;
+wire   opreg_80_64_n  = 1'b1;
 wire   opreg_invvide  = 1'b0;
 wire   mod_modsel = 1'b0; // forward reference
 wire   mod_enaltset = 1'b0; // forward reference
@@ -147,6 +147,24 @@ wire [7:0] trs_dsp_data_b;
 
 wire [7:0] dummy_out;
 
+// Pre-accumulated row base address for 80x24 mode: row80_base = 80 * vga_YYYYY.
+// Updated once per text row to replace the double carry-chain adder
+// ({Y,6'b0} + {Y,4'b0,2'b0} + X) in the BRAM address path with a single
+// addition (row80_base + X), halving carry-chain resource consumption and
+// allowing the P&R tool to place SPI logic in better locations.
+reg [10:0] row80_base;
+
+always @(posedge vga_clk) begin
+    if (genlock) begin
+        row80_base <= 11'd0;
+    end else if (vga_xxx == 3'b111 && vga_XXXXXXX == 7'd99) begin
+        if ({vga_YYYYY, vga_yyyyy} == {5'd26, 5'd4})
+            row80_base <= 11'd0;           // frame wrap
+        else if (vga_yyyyy == 5'd19)
+            row80_base <= row80_base + 11'd80; // next text row
+    end
+end
+
 blk_mem_gen_2 trs_dsp (
    .clka(clk),
    .cea(bram_cea),
@@ -160,7 +178,7 @@ blk_mem_gen_2 trs_dsp (
    .clkb(vga_clk), // input
    .ceb(dsp_act & col_act & (vga_xxx == 3'b000)), // input
    .adb(vga_80_64_n ?
-        ({vga_YYYYY, 6'b000000} + {2'b00, vga_YYYYY, 4'b0000} + vga_XXXXXXX) : // 80*vga_YYYYY + dsp_XXXXXXX
+        (row80_base + {4'b0, vga_XXXXXXX}) : // pre-accumulated 80*Y + X, single adder
         {1'b0, dsp_YYYYY[3:0], dsp_XXXXXXX[5:0]}), // input [10:0]
    .wreb(1'b0), // input
    .dinb(8'h00), // input [7:0]
