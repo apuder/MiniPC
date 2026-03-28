@@ -99,6 +99,7 @@ Everything else is provided for you, and it is recommended that you look around 
 #ifndef __KERNEL__
 #define __KERNEL__
 
+#include <stdint.h>
 #include <assert.h>
 #include <stdarg.h>
 
@@ -1009,9 +1010,13 @@ void init_ipc();
 \sa ENABLE_INTR    
 */
 /* TOS_ENDIF never */
+#if 1
+#define DISABLE_INTR(save)
+#else
 #define DISABLE_INTR(save)	asm ("pushfl");                   \
                                 asm ("popl %0" : "=r" (save) : ); \
 				asm ("cli");
+#endif
 
 /* TOS_IFDEF never */
 /*!
@@ -1020,8 +1025,12 @@ void init_ipc();
 \sa DISABLE_INTR
 */
 /* TOS_ENDIF never */
+#if 1
+#define ENABLE_INTR(save)
+#else
 #define ENABLE_INTR(save) 	asm ("pushl %0" : : "m" (save)); \
 				asm ("popfl");
+#endif
 
 /* TOS_IFDEF never */
 /*!

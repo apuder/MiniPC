@@ -15,8 +15,9 @@
 
 void kernel_main()
 {
-  uart_set_div(CLK_FREQ/115200.0 + 0.5);
+  uart_set_div(CLK_FREQ / 115200.0 + 0.5);
   uart_puts("Hello TOS!\r\n");
+  output_string(kernel_window, "Hello TOS!\n");
   while(1);
 #if 0
     init_process();
