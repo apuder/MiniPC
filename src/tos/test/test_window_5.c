@@ -22,9 +22,9 @@ void test_window_5()
 	 * 
 	 */
 	 
-	unsigned video_base = 0xB8000;
+	unsigned video_base = 0x50000000;
 	unsigned columns = 80;
-	unsigned rows = 25;
+	unsigned rows = 24;
 	int i,j;
 	unsigned base;
 	char ch;
@@ -89,10 +89,10 @@ void test_window_5()
 	clear_window(kernel_window);
 	for (j = 0; j < rows; j++) 
 	{
-		base = video_base + j * columns * 2;
+		base = video_base + j * columns;
 		for (i = 0; i < columns; i++) 
 		{
-			ch = peek_b(base + 2 * i);
+			ch = peek_b(base + i);
 			if ((ch != 0) && (ch != ' '))
 			{
 				test_result = 4;   // bad clear_window() error code 

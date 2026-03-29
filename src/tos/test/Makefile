@@ -15,13 +15,13 @@ include ../MakeVars
 
 OBJS=run_tests.o common.o lib.o \
     test_mem_1.o \
-    test_window_1.o
-#    test_window_2.o \
-#    test_window_3.o \
-#    test_window_4.o \
-#    test_window_5.o \
-#    test_window_6.o \
-#    test_window_7.o \
+    test_window_1.o \
+    test_window_2.o \
+    test_window_3.o \
+    test_window_4.o \
+    test_window_5.o \
+    test_window_6.o \
+    test_window_7.o
 #    test_create_process_1.o \
 #    test_create_process_2.o \
 #    test_create_process_3.o \

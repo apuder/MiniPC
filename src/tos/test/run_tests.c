@@ -7,13 +7,13 @@ typedef void (*function_pointer) ();
 function_pointer tests[] =  {
     //test_mem_1,
     test_window_1,
-#if 0
     test_window_2, 
     test_window_3, 
     test_window_4, 
     test_window_5, 
     test_window_6, 
     test_window_7, 
+#if 0
     test_create_process_1,
     test_create_process_2,
     test_create_process_3,
