@@ -1,4 +1,6 @@
 **/*.bin
+**/*.lib
 **/*.elf
 **/*.hex
 **/*.o
+**/disptable.c

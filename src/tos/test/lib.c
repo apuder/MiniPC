@@ -23,7 +23,7 @@
 #define output_char   lib_output_char
 #define output_string lib_output_string
 #define printnum      lib_printnum
-#define vsprintf      lib_vsprintf
+#define k_vsprintf    lib_vsprintf
 #define wprintf       lib_wprintf
 #define kernel_window lib_kernel_window
 #define kprintf       lib_kprintf

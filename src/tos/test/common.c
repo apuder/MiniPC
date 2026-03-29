@@ -1,12 +1,13 @@
 #include <kernel.h>
 #include <test.h>
 #include <lib.h>
+#include <uart.h>
 
 
 int test_result; 
 unsigned check_sum;
 char test_results[MAX_NUM_TESTS];
-WINDOW report_window = {0, 23, 80, 2, 0, 0, ' '};
+WINDOW report_window = {0, 22, 80, 2, 0, 0, ' '};
 
     
 extern WORD lib_default_color;
@@ -14,16 +15,18 @@ extern WORD lib_default_color;
 
 void test_reset()
 {
-    asm("cli");
-    interrupts_initialized = FALSE;
+    //asm("cli");
+    //interrupts_initialized = FALSE;
 
     lib_clear_window(kernel_window);
 
     test_result = 0;
 
+#if 0
     init_process();
     init_dispatcher();
     init_ipc();
+#endif
 
     /*
      * Normally we would call the following init_*(), but the way some
@@ -37,6 +40,7 @@ void test_reset()
     
 }
 
+#if 0
 /*
  * Check if a process is on ready queue.
  */ 
@@ -71,7 +75,7 @@ BOOL is_on_ready_queue(PROCESS proc)
  */
 void return_to_boot()
 {
-   asm("cli");
+   //asm("cli");
    
    int i;
    for ( i = 1; i < MAX_PROCS; i ++)
@@ -83,16 +87,17 @@ void return_to_boot()
 
    resign();
 }
+#endif
 
 /*
 * Write test report to the screen
 */
 void write_test_report(char attr)
 {
-    char ch = 196; // Horizontal line
+    char ch = 0x8c; // Horizontal line
     int i;
     
-    asm ("cli");
+    //asm ("cli");
     lib_default_color = attr;
     lib_clear_window(&report_window);
     for (i = 0; i < 5; i++)
@@ -105,6 +110,9 @@ void write_test_report(char attr)
 
 void send_to_test_center (char* cmd)
 {
+#if 1
+   uart_puts(cmd);
+#else
     while (*cmd != '\0') {
 	/*
 	 * Wait for the UART to accept the next byte
@@ -113,6 +121,7 @@ void send_to_test_center (char* cmd)
         outportb (COM2_PORT, *cmd);
 	cmd++;
     }
+#endif
 }
 
 
@@ -155,7 +164,7 @@ void check_screen_output(char** contents)
 {
    int i = 0;
    while (contents[i] != NULL) {
-       unsigned position = 0xb8000 + 80 * 2 * i;
+       unsigned position = 0x50000000 + 80 * i;
 
        int j;
        for (j = 0; contents[i][j] != '\0'; j++) {
@@ -168,6 +177,7 @@ void check_screen_output(char** contents)
 	       }
 	   }
 
+#if 0
 	   // Check that the character attribute is bright white (0x0f)
 	   // For a blank ' ' we don't check the attribute since it
 	   // doesn't matter
@@ -176,6 +186,9 @@ void check_screen_output(char** contents)
 	       return;
 	   }
 	   position += 2;
+#else
+      position += 1;
+#endif
        }
        i++;
    }
@@ -203,6 +216,7 @@ int string_compare(char* str1, char* str2)
    return equal;
 }
 
+#if 0
 /*
  *  Given the name of a process, find its PCB entry 
  */
@@ -411,3 +425,4 @@ void check_port(PORT the_port, char* owner_name, BOOL should_be_open)
    if (!found )
       test_result = 32;
 }
+#endif

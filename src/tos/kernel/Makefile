@@ -18,7 +18,12 @@ OBJS = startup.o main.o uart.o mem.o window.o assert.o
 %.o: %.c .depend
 	$(CC) $(CFLAGS) -o $@ -c $<
 
-all: kernel.bin
+all: kernel.bin lib
+
+lib: kernel.lib
+
+kernel.lib: $(OBJS)
+	$(AR) rcs kernel.lib $(OBJS)
 
 kernel.elf: $(OBJS)
 	$(CC) $(CFLAGS) -Tlinker.ld -o kernel.elf $(OBJS) $(LIBS)
@@ -53,7 +58,7 @@ indent:
 # option
 
 clean :
-	rm -f *~ *.o *.bak *.img
+	rm -f *~ *.o *.bak *.img *.lib *.elf *.bin disptable.c
 
 ifeq (.depend, $(wildcard .depend))
 include .depend

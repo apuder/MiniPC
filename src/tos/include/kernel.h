@@ -341,7 +341,8 @@ supports such lists and enables this function to act accordingly to each format 
 \sa wprintf(), kprintf()
 */
 /* TOS_ENDIF never */
-int vsprintf(char *buf, const char *fmt, va_list argp);
+int k_vsprintf(char *buf, const char *fmt, va_list argp);
+#define vsprintf k_vsprintf
 
 /* TOS_IFDEF never */
 /*! 

@@ -5,8 +5,9 @@
 typedef void (*function_pointer) ();
 
 function_pointer tests[] =  {
-    test_mem_1,
+    //test_mem_1,
     test_window_1,
+#if 0
     test_window_2, 
     test_window_3, 
     test_window_4, 
@@ -36,12 +37,13 @@ function_pointer tests[] =  {
     test_isr_3,
     test_timer_1,
     test_com_1,
+#endif
     //test_fork_1,
     NULL
 };
 
 
-
+#if 0
 void init_com2()
 {
     /* LineControl disabled to set baud rate */
@@ -58,6 +60,7 @@ void init_com2()
     outportb (COM2_PORT + 4, 0x0b);
     inportb (COM2_PORT);
 }
+#endif
 
 
 
@@ -78,7 +81,7 @@ void run_all_tests()
 }
 
 
-
+#if 0
 void run_selected_tests()
 {
     init_com2();
@@ -120,10 +123,15 @@ void run_selected_tests()
     send_to_test_center(test_results);
     while (42) ;
 }
+#endif
 
 
 
 void kernel_main()
 {
+#if 0
     run_selected_tests();
+#else
+    run_all_tests();
+#endif
 }

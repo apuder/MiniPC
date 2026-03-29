@@ -257,7 +257,7 @@ char           *printnum(char *b, unsigned int u, int base,
 #define ctod(c) ((c) - '0')
 
 
-int vsprintf(char *buf, const char *fmt, va_list argp)
+int k_vsprintf(char *buf, const char *fmt, va_list argp)
 {
     char           *p;
     char           *p2;
@@ -426,7 +426,7 @@ void wprintf(WINDOW * wnd, const char *fmt, ...)
 
 
 
-static WINDOW   kernel_window_def = { 0, 0, 80, 25, 0, 0, ' ' };
+static WINDOW   kernel_window_def = { 0, 0, 80, 24, 0, 0, ' ' };
 WINDOW         *kernel_window = &kernel_window_def;
 
 
