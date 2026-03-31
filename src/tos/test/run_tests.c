@@ -25,13 +25,13 @@ function_pointer tests[] =  {
     test_resign_4,
     test_resign_5,
     test_resign_6,
-#if 0
     test_ipc_1,
     test_ipc_2,
     test_ipc_3,
     test_ipc_4,
     test_ipc_5,
     test_ipc_6,
+#if 0
     test_isr_1,
     test_isr_2,
     test_isr_3,
