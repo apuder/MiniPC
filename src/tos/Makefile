@@ -1,5 +1,5 @@
 
-DIRS = kernel
+DIRS = kernel test
 
 all:
 	for i in $(DIRS); do $(MAKE) -C $$i || exit 1; done

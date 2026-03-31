@@ -1,7 +1,7 @@
 
 #include <kernel.h>
 
-static WINDOW   error_window = { 0, 24, 80, 1, 0, 0, ' ' };
+static WINDOW   error_window = { 0, 23, 80, 1, 0, 0, ' ' };
 
 
 int failed_assertion(const char *ex, const char *file, int line)

@@ -9,7 +9,7 @@ unsigned check_sum;
 char test_results[MAX_NUM_TESTS];
 WINDOW report_window = {0, 22, 80, 2, 0, 0, ' '};
 
-    
+
 extern WORD lib_default_color;
 
 
@@ -22,9 +22,9 @@ void test_reset()
 
     test_result = 0;
 
-#if 0
     init_process();
     init_dispatcher();
+#if 0
     init_ipc();
 #endif
 
@@ -40,7 +40,6 @@ void test_reset()
     
 }
 
-#if 0
 /*
  * Check if a process is on ready queue.
  */ 
@@ -87,7 +86,6 @@ void return_to_boot()
 
    resign();
 }
-#endif
 
 /*
 * Write test report to the screen
@@ -216,7 +214,6 @@ int string_compare(char* str1, char* str2)
    return equal;
 }
 
-#if 0
 /*
  *  Given the name of a process, find its PCB entry 
  */
@@ -295,7 +292,7 @@ void check_create_process(char* name,
 
    unsigned stack_pointer = this_process->esp;
 
-   if (peek_l(stack_pointer + 28 ) != (LONG) entry_point ) 
+   if (peek_l(stack_pointer + 40 ) != (LONG) entry_point )
    {
       test_result = 12;
       return;
@@ -425,4 +422,3 @@ void check_port(PORT the_port, char* owner_name, BOOL should_be_open)
    if (!found )
       test_result = 32;
 }
-#endif

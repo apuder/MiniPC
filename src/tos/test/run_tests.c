@@ -13,7 +13,6 @@ function_pointer tests[] =  {
     test_window_5, 
     test_window_6, 
     test_window_7, 
-#if 0
     test_create_process_1,
     test_create_process_2,
     test_create_process_3,
@@ -26,6 +25,7 @@ function_pointer tests[] =  {
     test_resign_4,
     test_resign_5,
     test_resign_6,
+#if 0
     test_ipc_1,
     test_ipc_2,
     test_ipc_3,
