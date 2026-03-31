@@ -312,6 +312,7 @@ end
         ST_WR_W0, ST_WR_W1, ST_WR_W2, ST_WR_W3,
 
         ST_NEXT_BYTE,
+        ST_PARTIAL_GAP,
         ST_FINISH
     } state_t;
 
@@ -783,25 +784,33 @@ end
                         st <= ST_FINISH;
                     end else begin
                         // Start a single-byte write transaction for this lane:
-                        // End current transaction (if any), then start new cmd+addr for lane.
+                        // End current transaction (if any), then wait briefly with CS# high.
+                        // The next state starts a clean new command+address+data transaction.
                         ps_ce_n    <= 1'b1;
                         sclk_en    <= 1'b0;
                         sio_oe_fsm <= 4'b0000;
 
-                        // Immediately start next transaction (next cycle)
-                        ps_ce_n    <= 1'b0;
-
-                        sh_start_tx(8'h38, width_t'(qpi_mode ? W_X4 : W_X1)); // write opcode (QPI: quad cmd)
-                        cmd <= 8'h38;
-
                         // Update address for this lane using saved base address
                         addr_l <= addr_plus_lane(base_addr, lane);
 
-                        // Proceed with cmd+addr then one data byte
-                        st <= ST_CMD; // reuse header states; after A0 will branch to ST_NEXT_BYTE again unless we handle
+                        // To guarantee a real CS# high period, restart via dedicated gap state.
+                        gap_cnt <= 4'd2;
+                        st <= ST_PARTIAL_GAP;
+
                         // To make the branch correct, we use a sentinel: set wstrb_l to one-hot of current lane
                         // then in ST_A0 we will go to ST_WR_BYTE
                         wstrb_l <= (4'b0001 << lane);
+                    end
+                end
+
+                ST_PARTIAL_GAP: begin
+                    if (gap_cnt != 0) begin
+                        gap_cnt <= gap_cnt - 1;
+                    end else begin
+                        ps_ce_n <= 1'b0;
+                        sh_start_tx(8'h38, width_t'(qpi_mode ? W_X4 : W_X1)); // write opcode (QPI: quad cmd)
+                        cmd <= 8'h38;
+                        st <= ST_CMD;
                     end
                 end
 
