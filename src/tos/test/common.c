@@ -15,8 +15,10 @@ extern WORD lib_default_color;
 
 void test_reset()
 {
-    //asm("cli");
-    //interrupts_initialized = FALSE;
+   volatile int save;
+
+   DISABLE_INTR(save);
+   interrupts_initialized = FALSE;
 
     lib_clear_window(kernel_window);
 
@@ -24,9 +26,7 @@ void test_reset()
 
     init_process();
     init_dispatcher();
-#if 0
     init_ipc();
-#endif
 
     /*
      * Normally we would call the following init_*(), but the way some
@@ -74,7 +74,9 @@ BOOL is_on_ready_queue(PROCESS proc)
  */
 void return_to_boot()
 {
-   //asm("cli");
+   volatile int    flag;
+
+   DISABLE_INTR(flag);
    
    int i;
    for ( i = 1; i < MAX_PROCS; i ++)
@@ -84,6 +86,7 @@ void return_to_boot()
             remove_ready_queue(&pcb[i]);
    }
 
+   // Don't enable interrupts
    resign();
 }
 
@@ -95,7 +98,9 @@ void write_test_report(char attr)
     char ch = 0x8c; // Horizontal line
     int i;
     
-    //asm ("cli");
+   volatile int    flag;
+
+   DISABLE_INTR(flag);
     lib_default_color = attr;
     lib_clear_window(&report_window);
     for (i = 0; i < 5; i++)
@@ -225,7 +230,7 @@ PROCESS find_process_by_name (char* name)
    int i;
    for (i = 0; i < MAX_PROCS; i++) 
    {
-      if (string_compare(pcb[i].name, name) )
+      if (pcb[i].used && string_compare(pcb[i].name, name) )
       {
          this_process = &pcb[i];
          break; 

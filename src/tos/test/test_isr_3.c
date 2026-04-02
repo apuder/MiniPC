@@ -20,14 +20,14 @@ void isr_process(PROCESS self, PARAM param)
     kprintf("ABCDEF");
 
     /* screen_base points to the beginning of the string "ABCDEF" */
-    screen_base = (unsigned char*) 0xb8000 + 4 * 80 * 2;
+    screen_base = (unsigned char*) 0x50000000 + 4 * 80;
     i = 0;
     int j;
     for (j = 0; j < 30; j ++) {
 	ticks = 3;
-	while (ticks--)
+	//while (ticks--)
 	    wait_for_interrupt(TIMER_IRQ);
-	*(screen_base + i * 2) = *(screen_base + i * 2) + 1;
+	*(screen_base + i) = *(screen_base + i) + 1;
 	i++;
 	if (i == 6)
 	    i = 0;
@@ -51,17 +51,17 @@ void test_isr_3 ()
     int i;
     int j = 0;
     unsigned char* screen_base;
-    screen_base = (unsigned char*) 0xb8000 + 7 * 80 * 2;
+    screen_base = (unsigned char*) 0x50000000 + 7 * 80;
 
     kprintf("\n\nBoot process:\n"); 
     kprintf("ABCDEF");
 
     PROCESS isr_pro = find_process_by_name("ISR process");
-    for (i = 0; i < 600000; i++) {
+    for (i = 0; i < 30000; i++) {
 	if (isr_pro->state == STATE_INTR_BLOCKED)
 	    check_2++;
 
-	*(screen_base + j * 2) = *(screen_base + j * 2) + 1;
+	*(screen_base + j) = *(screen_base + j) + 1;
 	j++;
 	if (j == 6)
 	    j = 0;

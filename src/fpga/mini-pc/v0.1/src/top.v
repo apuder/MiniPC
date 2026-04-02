@@ -83,12 +83,20 @@ module top (
    parameter ENABLE_DIV = 0;
    parameter ENABLE_FAST_MUL = 0;
    parameter ENABLE_COMPRESSED = 0;
-   parameter ENABLE_IRQ_QREGS = 0;
+  parameter ENABLE_IRQ_QREGS = 1;
+
+  // 18.2065 Hz legacy timer tick target (used as machine timer interrupt source).
+  localparam integer MTIMER_TARGET_HZ_NUM = 1;
+  localparam integer MTIMER_TARGET_HZ_DEN = 1;
+  //localparam integer MTIMER_TARGET_HZ_NUM = 182065;
+  //localparam integer MTIMER_TARGET_HZ_DEN = 10000;
+  localparam integer MTIMER_DIV = (CLK_FREQ * MTIMER_TARGET_HZ_DEN + (MTIMER_TARGET_HZ_NUM / 2)) / MTIMER_TARGET_HZ_NUM;
+  localparam integer MTIMER_DIV_WIDTH = (MTIMER_DIV > 1) ? $clog2(MTIMER_DIV) : 1;
 
    parameter        MEMBYTES = 4*(1 << SRAM_ADDR_WIDTH); 
    parameter [31:0] STACKADDR = (MEMBYTES);         // Grows down.  Software should set it.
    parameter [31:0] PROGADDR_RESET = 32'h0000_0000;
-   parameter [31:0] PROGADDR_IRQ = 32'h0000_0000;
+   parameter [31:0] PROGADDR_IRQ = 32'h4000_0080;   // Must match linked irq_entry in irq.s
 
    wire                       reset_n; 
    wire                       mem_valid;
@@ -126,6 +134,9 @@ module top (
    wire [31:0]                esp_data_o;
    wire                       psram_sel;
    reg                        psram_chip_present;
+  reg [MTIMER_DIV_WIDTH-1:0] mtimer_div_ctr;
+  reg                        mtimer_irq_pulse;
+  wire [31:0]                cpu_irq;
 
 `ifdef USE_LA
    // Assigns for external logic analyzer connction
@@ -141,6 +152,26 @@ module top (
 `endif
 
 wire clk;
+
+assign cpu_irq = mtimer_irq_pulse ? 32'h0000_0080 : 32'h0000_0000;
+
+always @(posedge clk) begin
+  if (!reset_n) begin
+    mtimer_div_ctr <= 'b0;
+    mtimer_irq_pulse <= 1'b0;
+  end else if (MTIMER_DIV <= 1) begin
+    mtimer_div_ctr <= 'b0;
+    mtimer_irq_pulse <= 1'b1;
+  end else begin
+    mtimer_irq_pulse <= 1'b0;
+    if (mtimer_div_ctr == MTIMER_DIV - 1) begin
+      mtimer_div_ctr <= 'b0;
+      mtimer_irq_pulse <= 1'b1;
+    end else begin
+      mtimer_div_ctr <= mtimer_div_ctr + 1'b1;
+    end
+  end
+end
 
 Gowin_rPLL clk_wiz_0(
    .clkout(clk),  // output 84 MHz
@@ -458,7 +489,8 @@ end
        .ENABLE_DIV(ENABLE_DIV),
        .ENABLE_FAST_MUL(ENABLE_FAST_MUL),
        .ENABLE_IRQ(1),
-       .ENABLE_IRQ_QREGS(ENABLE_IRQ_QREGS)
+      .ENABLE_IRQ_QREGS(ENABLE_IRQ_QREGS),
+      .ENABLE_IRQ_TIMER(0)
        ) cpu
        (
         .clk         (clk),
@@ -470,7 +502,7 @@ end
         .mem_wdata   (mem_wdata),
         .mem_wstrb   (mem_wstrb),
         .mem_rdata   (mem_rdata),
-        .irq         ('b0)
+        .irq         (cpu_irq)
         );
 
 endmodule // top

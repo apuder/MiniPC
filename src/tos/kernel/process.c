@@ -47,6 +47,9 @@ extern unsigned __stack_top;
 #define CTX_OFS_MSTATUS         120U
 #define CTX_OFS_MEPC            124U
 
+#define IRQ_MASK_ALL_DISABLED   (~0u)
+#define IRQ_MASK_TIMER_ENABLED  0xFFFFFF7Fu
+
 /*
  * Bootstrap for a freshly-created process context.
  *
@@ -71,6 +74,7 @@ PORT create_process(void (*ptr_to_new_proc) (PROCESS, PARAM),
     MEM_ADDR        esp;
     MEM_ADDR        stack_top;
     MEM_ADDR        gp;
+    LONG            initial_irq_mask;
     PROCESS         new_proc;
     PORT            new_port;
     /* TOS_IFDEF assn7 */
@@ -106,6 +110,12 @@ PORT create_process(void (*ptr_to_new_proc) (PROCESS, PARAM),
     /* Capture current global pointer so new process can access globals. */
     asm volatile ("mv %0, gp":"=r"(gp));
 
+    if (interrupts_initialized) {
+        initial_irq_mask = (LONG)IRQ_MASK_TIMER_ENABLED;
+    } else {
+        initial_irq_mask = (LONG)IRQ_MASK_ALL_DISABLED;
+    }
+
     /*
      * Build a full register context on the stack. The layout matches resign()
      * and already reserves mstatus/mepc slots for a future ISR-based switch.
@@ -140,7 +150,7 @@ PORT create_process(void (*ptr_to_new_proc) (PROCESS, PARAM),
     poke_l(esp + CTX_OFS_T4, 0);
     poke_l(esp + CTX_OFS_T5, 0);
     poke_l(esp + CTX_OFS_T6, 0);
-    poke_l(esp + CTX_OFS_MSTATUS, 0);
+    poke_l(esp + CTX_OFS_MSTATUS, initial_irq_mask);
     poke_l(esp + CTX_OFS_MEPC, (LONG) process_bootstrap);
 
     /* Save context ptr (actually current stack pointer) */
@@ -238,6 +248,7 @@ PROCESS fork_impl(MEM_ADDR ra_val, MEM_ADDR caller_sp)
     PROCESS         new_proc;
     volatile int    flag;
     MEM_ADDR        gp;
+    LONG            inherited_irq_mask;
 
     DISABLE_INTR(flag);
     if (next_free_pcb == NULL)
@@ -289,6 +300,11 @@ PROCESS fork_impl(MEM_ADDR ra_val, MEM_ADDR caller_sp)
 
     asm volatile ("mv %0, gp" : "=r"(gp));
 
+    /* Inherit current IRQ mask state into the child context. */
+    DISABLE_INTR(flag);
+    inherited_irq_mask = (LONG)flag;
+    ENABLE_INTR(flag);
+
     poke_l(child_context + CTX_OFS_RA,      ra_val);       /* return to fork()'s call site */
     poke_l(child_context + CTX_OFS_GP,      gp);
     poke_l(child_context + CTX_OFS_TP,      0);
@@ -319,7 +335,7 @@ PROCESS fork_impl(MEM_ADDR ra_val, MEM_ADDR caller_sp)
     poke_l(child_context + CTX_OFS_T4,      0);
     poke_l(child_context + CTX_OFS_T5,      0);
     poke_l(child_context + CTX_OFS_T6,      0);
-    poke_l(child_context + CTX_OFS_MSTATUS, 0);
+    poke_l(child_context + CTX_OFS_MSTATUS, inherited_irq_mask);
     poke_l(child_context + CTX_OFS_MEPC,    ra_val);       /* for future ISR use */
 
     new_proc->esp = child_context;

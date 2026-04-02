@@ -244,7 +244,11 @@ void __attribute__ ((naked)) resign()
         "sw t4,   " STR(CTX_OFS_T4)      "(sp)      \n"
         "sw t5,   " STR(CTX_OFS_T5)      "(sp)      \n"
         "sw t6,   " STR(CTX_OFS_T6)      "(sp)      \n"
-        "sw zero, " STR(CTX_OFS_MSTATUS) "(sp)      \n"
+        /* Disable IRQs and save previous IRQ mask as part of context. */
+        "li t0, -1                                 \n"
+        "mv a0, t0                                 \n"
+        " .word 0x0605650b                         \n"
+        "sw a0, " STR(CTX_OFS_MSTATUS) "(sp)      \n"
         "sw ra,   " STR(CTX_OFS_MEPC)    "(sp)      \n"
 
         /* active_proc->esp = sp */
@@ -261,7 +265,16 @@ void __attribute__ ((naked)) resign()
         "lw t1, 0(t0)                               \n"
         "lw sp, 12(t1)                              \n"
 
-        /* Restore context of selected process. */
+        /*
+         * Restore context of selected process.
+         *
+         * The shared context convention is that CTX_OFS_RA always contains
+         * the address where execution should resume. For voluntary resign()
+         * switches, that is the caller's return address. For IRQ-saved
+         * contexts, irq.s writes the interrupted PC into that same slot.
+         * This lets us finish with a plain 'ret' without clobbering any
+         * restored general-purpose register just to hold a jump target.
+         */
         "lw ra,   " STR(CTX_OFS_RA)      "(sp)      \n"
         "lw gp,   " STR(CTX_OFS_GP)      "(sp)      \n"
         "lw tp,   " STR(CTX_OFS_TP)      "(sp)      \n"
@@ -292,6 +305,13 @@ void __attribute__ ((naked)) resign()
         "lw t4,   " STR(CTX_OFS_T4)      "(sp)      \n"
         "lw t5,   " STR(CTX_OFS_T5)      "(sp)      \n"
         "lw t6,   " STR(CTX_OFS_T6)      "(sp)      \n"
+
+        /* Restore per-process IRQ mask saved in context frame. */
+        "lw t0,   " STR(CTX_OFS_MSTATUS) "(sp)      \n"
+        "mv a0, t0                                 \n"
+        " .word 0x0605650b                         \n"
+        "lw a0,   " STR(CTX_OFS_A0)      "(sp)      \n"
+
         "addi sp, sp, " STR(CONTEXT_FRAME_SIZE)     "\n"
         "ret                                        \n"
         ::: "memory");

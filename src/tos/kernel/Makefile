@@ -6,8 +6,8 @@ include ../MakeVars
 %.o: %.c
 %.o: %.s
 
-OBJS = startup.o main.o uart.o mem.o window.o assert.o \
-       dispatch.o process.o ipc.o
+OBJS = startup.o irq.o main.o uart.o mem.o window.o assert.o \
+	dispatch.o process.o ipc.o intr.o
 
 #OBJS = startup.o stdlib.o window.o process.o assert.o mem.o \
 #       dispatch.o intr.o inout.o ipc.o com.o timer.o \
@@ -20,6 +20,9 @@ OBJS = startup.o main.o uart.o mem.o window.o assert.o \
 	$(CC) $(CFLAGS) -o $@ -c $<
 
 all: kernel.bin lib
+
+irq.o: irq.s custom_ops.s
+	$(CC) $(COMMONFLAGS) -x assembler-with-cpp -o $@ -c $<
 
 lib: kernel.lib
 

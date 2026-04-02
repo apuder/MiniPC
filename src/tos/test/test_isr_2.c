@@ -16,7 +16,7 @@ unsigned int test_isr_2_check_sum;
 void test_isr_2_process_1(PROCESS self, PARAM param)
 {
     /* screen_offset points to the "A" of process 1 */
-    MEM_ADDR screen_offset = 0xb8000 + 4 * 160 + 2 * 11;
+    MEM_ADDR screen_offset = 0x50000000 + 4 * 80 + 11;
 
     while (42) {
         if (check_sum == 80000)
@@ -29,7 +29,7 @@ void test_isr_2_process_1(PROCESS self, PARAM param)
 void test_isr_2_process_2(PROCESS self, PARAM param)
 {
     /* screen_offset points to the "Z" of process 2 */
-    MEM_ADDR screen_offset = 0xb8000 + 5 * 160 + 2 * 11;
+    MEM_ADDR screen_offset = 0x50000000 + 5 * 80 + 11;
     
     while (42) {
         if (test_isr_2_check_sum == 80000)

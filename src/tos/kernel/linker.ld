@@ -8,6 +8,18 @@ SECTIONS
 	. = __kernel_load_addr;
 	__image_start = .;
 
+
+	.startup : ALIGN(4)
+	{
+		KEEP(*(.startup))
+	}
+
+	. = __kernel_load_addr + 0x80;
+	.irq_vector : ALIGN(4)
+	{
+		KEEP(*(.irq_vector))
+	}
+
 	.text : ALIGN(4)
 	{
 		*(.text .text.*)

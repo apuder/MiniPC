@@ -1011,13 +1011,15 @@ void init_ipc();
 \sa ENABLE_INTR    
 */
 /* TOS_ENDIF never */
-#if 1
-#define DISABLE_INTR(save)
-#else
-#define DISABLE_INTR(save)	asm ("pushfl");                   \
-                                asm ("popl %0" : "=r" (save) : ); \
-				asm ("cli");
-#endif
+#define DISABLE_INTR(save)                                                   \
+  do {                                                                     \
+    register unsigned __irq_mask asm("a0") = ~0u;                      \
+    asm volatile (".word 0x0605650b"                                    \
+            : "+r"(__irq_mask)                                     \
+            :                                                      \
+            : "memory");                                          \
+    (save) = (volatile int)__irq_mask;                                   \
+  } while (0)
 
 /* TOS_IFDEF never */
 /*!
@@ -1026,12 +1028,16 @@ void init_ipc();
 \sa DISABLE_INTR
 */
 /* TOS_ENDIF never */
-#if 1
-#define ENABLE_INTR(save)
-#else
-#define ENABLE_INTR(save) 	asm ("pushl %0" : : "m" (save)); \
-				asm ("popfl");
-#endif
+#define ENABLE_INTR(save)                                                    \
+  do {                                                                     \
+    if ((unsigned)(save) != ~0u) {                                       \
+      register unsigned __irq_mask asm("a0") = (unsigned)(save);      \
+      asm volatile (".word 0x0605650b"                                \
+              : "+r"(__irq_mask)                                 \
+              :                                                  \
+              : "memory");                                      \
+    }                                                                    \
+  } while (0)
 
 /* TOS_IFDEF never */
 /*!
@@ -1130,10 +1136,10 @@ void init_interrupts ();
 /* TOS_IFDEF never */
 /*!
 \brief The number associated with a timer interrupt.
-\details In TOS the interrupt controller is re-programmed so that the timer interrupt is mapped to interrupt number 0x60.
+\details On the RISC core, external interrupts are represented as bits in the IRQ bitmap input. The machine timer source uses index 7.
 */
 /* TOS_ENDIF never */
-#define TIMER_IRQ   0x60
+#define TIMER_IRQ   7
 
 /* TOS_IFDEF never */
 /*!

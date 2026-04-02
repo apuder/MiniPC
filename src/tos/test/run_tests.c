@@ -31,10 +31,10 @@ function_pointer tests[] =  {
     test_ipc_4,
     test_ipc_5,
     test_ipc_6,
-#if 0
-    test_isr_1,
+    //test_isr_1,   // Not used
     test_isr_2,
     test_isr_3,
+#if 0
     test_timer_1,
     test_com_1,
 #endif

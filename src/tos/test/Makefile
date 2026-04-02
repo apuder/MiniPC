@@ -35,7 +35,7 @@ OBJS=run_tests.o common.o lib.o \
     test_resign_5.o \
     test_resign_6.o \
     test_ipc_1.o test_ipc_2.o test_ipc_3.o test_ipc_4.o \
-    test_ipc_5.o test_ipc_6.o
+    test_ipc_5.o test_ipc_6.o test_isr_2.o test_isr_3.o
 #    test_isr_1.o test_isr_2.o test_isr_3.o \
 #    test_timer_1.o \
 #    test_com_1.o \
@@ -44,7 +44,7 @@ OBJS=run_tests.o common.o lib.o \
 tests: kernel.bin
 
 kernel.elf: $(OBJS)
-	$(CC) $(CFLAGS) -T../kernel/linker.ld -o kernel.elf ../kernel/startup.o $(OBJS) ../kernel/kernel.lib $(LIBS)
+	$(CC) $(CFLAGS) -T../kernel/linker.ld -o kernel.elf ../kernel/startup.o ../kernel/irq.o $(OBJS) ../kernel/kernel.lib $(LIBS)
 
 kernel.bin: kernel.elf Makefile
 	$(OBJCOPY) kernel.elf -O binary kernel.bin

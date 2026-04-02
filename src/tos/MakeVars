@@ -7,9 +7,11 @@ OBJCOPY = riscv64-unknown-elf-objcopy
 OBJDUMP = riscv64-unknown-elf-objdump
 
 # Options for the RISC cross compiler
-COMMONFLAGS = -march=rv32i2p0 -mabi=ilp32
+COMMONFLAGS = -march=rv32i2p0 -mabi=ilp32 -mno-relax
 CC = riscv64-unknown-elf-gcc
 CFLAGS = -mno-save-restore $(COMMONFLAGS) -nostartfiles -nostdlib -static -O1 -I../include
+CFLAGS += -msmall-data-limit=0
+CFLAGS += -Wl,--no-relax
 
 AS = riscv64-unknown-elf-as
 ASFLAGS = $(COMMONFLAGS)
