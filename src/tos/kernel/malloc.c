@@ -3,13 +3,13 @@
 
 #include <kernel.h>
 
-int             sbrk_ptr = SBRK_BEGIN;
+uintptr_t       sbrk_ptr = SBRK_BEGIN;
 
 void           *sbrk(size_t size)
 {
-    assert(sbrk_ptr + size < SBRK_END);
-    int             tmp = sbrk_ptr;
-    sbrk_ptr += size;
+    assert(sbrk_ptr + (uintptr_t) size < (uintptr_t) SBRK_END);
+    uintptr_t       tmp = sbrk_ptr;
+    sbrk_ptr += (uintptr_t) size;
     return (void *) tmp;
 }
 

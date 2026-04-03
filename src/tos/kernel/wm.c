@@ -73,23 +73,27 @@ WM             *window_tail = NULL;
 
 PORT            wm_port;
 
-#define FRAME_FOCUS_TOP_LEFT 0xC9
-#define FRAME_FOCUS_TOP_RIGHT 0xBB
-#define FRAME_FOCUS_BOTTOM_LEFT 0xC8
-#define FRAME_FOCUS_BOTTOM_RIGHT 0xBC
-#define FRAME_FOCUS_HORIZONTAL 0xCD
-#define FRAME_FOCUS_VERTICAL 0xBA
+#define FRAME_FOCUS_TOP_LEFT          176
+#define FRAME_FOCUS_TOP_RIGHT         176
+#define FRAME_FOCUS_TOP_HORIZONTAL    176
+#define FRAME_FOCUS_BOTTOM_LEFT       131
+#define FRAME_FOCUS_BOTTOM_RIGHT      131
+#define FRAME_FOCUS_BOTTOM_HORIZONTAL 131
+#define FRAME_FOCUS_LEFT_VERTICAL     191
+#define FRAME_FOCUS_RIGHT_VERTICAL    191
 
-#define FRAME_NO_FOCUS_TOP_LEFT 0xDA
-#define FRAME_NO_FOCUS_TOP_RIGHT 0xBF
-#define FRAME_NO_FOCUS_BOTTOM_LEFT 0xC0
-#define FRAME_NO_FOCUS_BOTTOM_RIGHT 0xD9
-#define FRAME_NO_FOCUS_HORIZONTAL 0xC4
-#define FRAME_NO_FOCUS_VERTICAL 0xB3
+#define FRAME_NO_FOCUS_TOP_LEFT          176
+#define FRAME_NO_FOCUS_TOP_RIGHT         176
+#define FRAME_NO_FOCUS_TOP_HORIZONTAL    176
+#define FRAME_NO_FOCUS_BOTTOM_LEFT       131
+#define FRAME_NO_FOCUS_BOTTOM_RIGHT      131
+#define FRAME_NO_FOCUS_BOTTOM_HORIZONTAL 131
+#define FRAME_NO_FOCUS_LEFT_VERTICAL     191
+#define FRAME_NO_FOCUS_RIGHT_VERTICAL    191
 
-#define DEFAULT_CURSOR_CHAR 0xDC
+#define DEFAULT_CURSOR_CHAR 95
 
-char            screen_buffer[80 * 25];
+char            screen_buffer[80 * 24];
 
 void clear_screen_buffer()
 {
@@ -100,10 +104,9 @@ void clear_screen_buffer()
 
 void copy_screen_buffer()
 {
-    char           *p = (char *) 0xb8000;
+    char           *p = (char *) 0x50000000;
     for (int i = 0; i < sizeof(screen_buffer); i++) {
         *p++ = screen_buffer[i];
-        *p++ = 0x0f;
     }
 }
 
@@ -111,7 +114,7 @@ void poke_screen_buffer(int x, int y, char ch)
 {
     if (x < 0 || y < 0)
         return;
-    if (x >= 80 || y >= 25)
+    if (x >= 80 || y >= 24)
         return;
     screen_buffer[y * 80 + x] = ch;
 }
@@ -134,16 +137,19 @@ void draw_window_frame(WM * window, BOOL is_top)
     poke_screen_buffer(frame_x + frame_width, frame_y + frame_height,
                        is_top ? FRAME_FOCUS_BOTTOM_RIGHT :
                        FRAME_NO_FOCUS_BOTTOM_RIGHT);
-    char            ch =
-        is_top ? FRAME_FOCUS_HORIZONTAL : FRAME_NO_FOCUS_HORIZONTAL;
+    char ch_top =
+        is_top ? FRAME_FOCUS_TOP_HORIZONTAL : FRAME_NO_FOCUS_TOP_HORIZONTAL;
+    char ch_bottom =
+        is_top ? FRAME_FOCUS_BOTTOM_HORIZONTAL : FRAME_NO_FOCUS_BOTTOM_HORIZONTAL;
     for (int x = 0; x < window->width; x++) {
-        poke_screen_buffer(window->x + x, frame_y, ch);
-        poke_screen_buffer(window->x + x, frame_y + frame_height, ch);
+        poke_screen_buffer(window->x + x, frame_y, ch_top);
+        poke_screen_buffer(window->x + x, frame_y + frame_height, ch_bottom);
     }
-    ch = is_top ? FRAME_FOCUS_VERTICAL : FRAME_NO_FOCUS_VERTICAL;
+    char ch_left = is_top ? FRAME_FOCUS_LEFT_VERTICAL : FRAME_NO_FOCUS_LEFT_VERTICAL;
+    char ch_right = is_top ? FRAME_FOCUS_RIGHT_VERTICAL : FRAME_NO_FOCUS_RIGHT_VERTICAL;
     for (int y = 0; y < window->height; y++) {
-        poke_screen_buffer(frame_x, window->y + y, ch);
-        poke_screen_buffer(frame_x + frame_width, window->y + y, ch);
+        poke_screen_buffer(frame_x, window->y + y, ch_left);
+        poke_screen_buffer(frame_x + frame_width, window->y + y, ch_right);
     }
 }
 

@@ -1,12 +1,14 @@
 
 #include <kernel.h>
 
-static WINDOW   error_window = { 0, 23, 80, 1, 0, 0, ' ' };
+static WINDOW   error_window = { 0, 22, 80, 2, 0, 0, ' ' };
 
 
 int failed_assertion(const char *ex, const char *file, int line)
 {
-    //asm("cli");
+    volatile int save;
+
+    DISABLE_INTR(save);
     clear_window(&error_window);
     wprintf(&error_window, "Failed assertion '%s' at line %d of %s",
             ex, line, file);
@@ -17,7 +19,9 @@ int failed_assertion(const char *ex, const char *file, int line)
 
 void panic_mode(const char *msg, const char *file, int line)
 {
-    //asm("cli");
+    volatile int save;
+
+    DISABLE_INTR(save);
     clear_window(&error_window);
     wprintf(&error_window, "PANIC: '%s' at line %d of %s",
             msg, line, file);

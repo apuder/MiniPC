@@ -1423,8 +1423,9 @@ void init_pacman(WINDOW* wnd, int num_ghosts);
 /// @cond
 /* TOS_ENDIF never */
 #define ONE_MB (1024 * 1024)
-#define SBRK_BEGIN (ONE_MB * 1)
-#define SBRK_END (ONE_MB * 8)
+extern char _end;
+#define SBRK_BEGIN ((uintptr_t) (&_end))
+#define SBRK_END ((ONE_MB * 3) + SBRK_BEGIN)
 
 /* TOS_IFDEF never */
 /// @endcond
