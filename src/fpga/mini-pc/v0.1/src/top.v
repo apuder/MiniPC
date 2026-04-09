@@ -87,7 +87,7 @@ module top (
 
   // 18.2065 Hz legacy timer tick target (used as machine timer interrupt source).
   localparam integer MTIMER_TARGET_HZ_NUM = 1;
-  localparam integer MTIMER_TARGET_HZ_DEN = 1;
+  localparam integer MTIMER_TARGET_HZ_DEN = 5;
   //localparam integer MTIMER_TARGET_HZ_NUM = 182065;
   //localparam integer MTIMER_TARGET_HZ_DEN = 10000;
   localparam integer MTIMER_DIV = (CLK_FREQ * MTIMER_TARGET_HZ_DEN + (MTIMER_TARGET_HZ_NUM / 2)) / MTIMER_TARGET_HZ_NUM;

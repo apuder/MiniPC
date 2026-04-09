@@ -27,11 +27,8 @@ void kernel_main()
     //init_com();
 
     init_wm();
-    //init_keyb();
-    //start_shell();
-
-    int window_id = wm_create(10, 3, 50, 17);
-    wm_print(window_id, "Welcome to TOS!\n");
+    init_keyb();
+    start_shell();
 
     become_zombie();
 }

@@ -12,6 +12,7 @@ PORT            keyb_port;
 #define RIGHT_ARROW	3
 #define DOWN_ARROW	4
 
+#if 0
 /* Variables indicating scancodes */
 static unsigned char brk = 0;
 static unsigned ignore = 0;
@@ -293,7 +294,21 @@ void keyb_notifier(PROCESS self, PARAM param)
     }
     become_zombie();
 }
+#endif
 
+void keyb_notifier(PROCESS self, PARAM param)
+{
+    Keyb_Message    msg;
+
+ #if 0
+    while (1) {
+        wait_for_interrupt(KEYB_IRQ);
+        msg.key_buffer = (char *) &new_key;
+        message(keyb_port, &msg);
+    }
+ #endif
+    become_zombie();
+}
 
 #define MAX_KEYB_BUFFER 10
 

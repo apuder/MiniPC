@@ -5,9 +5,9 @@
 #define PONG_WINDOW_HEIGHT 10
 
 #define PONG_RACKET_HEIGHT 3
-#define PONG_RACKET_CHAR 0xb0
+#define PONG_RACKET_CHAR 191
 
-#define PONG_BALL_CHAR 0x04
+#define PONG_BALL_CHAR 140
 
 #define PONG_STATE_INIT 0
 #define PONG_STATE_MOVE 1
@@ -22,7 +22,7 @@ void clear_buffer(char *buffer)
 
 void fill_buffer(char *buffer)
 {
-    k_memset(buffer, 0xDB, PONG_WINDOW_WIDTH * PONG_WINDOW_HEIGHT);
+    k_memset(buffer, '.', PONG_WINDOW_WIDTH * PONG_WINDOW_HEIGHT);
 }
 
 void draw_racket(char *buffer, int racket_pos)
@@ -67,7 +67,7 @@ void pong_process(PROCESS self, PARAM param)
     wm_print(window_id, "\n  PONG\n\n");
     wm_print(window_id, "  Keys:\n    'q' for up\n    'a' for down\n\n");
     wm_print(window_id, "  Hit any key to start... ");
-    keyb_get_keystroke(window_id, TRUE);
+    //keyb_get_keystroke(window_id, TRUE);
     wm_set_cursor(window_id, 0, 0, 0);
 
     while (1) {
@@ -117,7 +117,7 @@ void pong_process(PROCESS self, PARAM param)
             draw_racket(buffer, racket);
             buffer[y * PONG_WINDOW_WIDTH + x] = PONG_BALL_CHAR;
             wm_redraw_window(window_id);
-            sleep(5);
+            sleep(1);
             state = PONG_STATE_MOVE;
             break;
         case PONG_STATE_GAME_OVER:

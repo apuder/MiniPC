@@ -8,7 +8,8 @@ include ../MakeVars
 
 OBJS = startup.o irq.o main.o uart.o mem.o window.o assert.o \
 	dispatch.o process.o ipc.o intr.o malloc.o stdlib.o wm.o \
-	null.o timer.o
+	null.o timer.o keyb.o shell.o pong.o
+
 
 #OBJS = startup.o stdlib.o window.o process.o assert.o mem.o \
 #       dispatch.o intr.o inout.o ipc.o com.o timer.o \

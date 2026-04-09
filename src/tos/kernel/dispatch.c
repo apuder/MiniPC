@@ -311,6 +311,7 @@ void __attribute__ ((naked)) resign()
         "mv a0, t0                                 \n"
         " .word 0x0605650b                         \n"
         "lw a0,   " STR(CTX_OFS_A0)      "(sp)      \n"
+        "lw t0,   " STR(CTX_OFS_T0)      "(sp)      \n"
 
         "addi sp, sp, " STR(CONTEXT_FRAME_SIZE)     "\n"
         "ret                                        \n"

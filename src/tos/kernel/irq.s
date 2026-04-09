@@ -51,17 +51,17 @@ irq_entry:
 
     /*
      * Keep the shared context format compatible with resign(): the RA slot
-     * must always contain the address to resume execution at.
+     * always contains the architectural ra register value.
      *
-     * For an IRQ-saved context, the true resume PC is q0 (interrupted PC),
-     * while the interrupted process's architectural ra register must also be
-     * preserved. Store q0 in the RA slot and stash the real ra in the MEPC
-     * slot so both paths can restore correctly.
+     * For an IRQ-saved context, the interrupted resume PC comes from q0, so
+     * store q0 in the MEPC slot. This lets retirq resume correctly while a
+     * later resign()-based restore still sees a valid ra value in RA.
      */
     /* Save t0 now, before picorv32_getq_insn overwrites it with q0. */
     sw t0,   CTX_OFS_T0(sp)
     picorv32_getq_insn(t0, q0)
-    sw t0,   CTX_OFS_RA(sp)    /* interrupted PC → resume-address slot */
+    sw t0,   CTX_OFS_RA(sp)    /* interrupted resume PC for resign()/ret */
+    sw ra,   CTX_OFS_MEPC(sp)  /* architectural ra register */
     sw gp,   CTX_OFS_GP(sp)
     sw tp,   CTX_OFS_TP(sp)
 
@@ -91,9 +91,6 @@ irq_entry:
     sw t4,   CTX_OFS_T4(sp)
     sw t5,   CTX_OFS_T5(sp)
     sw t6,   CTX_OFS_T6(sp)
-    /* Save the interrupted process's architectural ra register. */
-    sw ra,   CTX_OFS_MEPC(sp)
-
     /*
      * Save the current IRQ mask in the shared context slot used by resign().
      * Do not store q1 here: q1 contains pending IRQ bits, not the mask value.
@@ -108,11 +105,13 @@ irq_entry:
     lw t1, 0(t0)
     sw sp, PCB_OFS_ESP(t1)
 
+#if 0
     /* Ensure gp points at the small-data region before entering C. */
     .option push
     .option norelax
     la gp, __global_pointer$
     .option pop
+#endif
 
     call isr_timer
 
@@ -122,7 +121,6 @@ irq_entry:
     lw sp, PCB_OFS_ESP(t1)
 
     /* Restore context of selected process. */
-    /* Restore the architectural ra register saved in the MEPC slot. */
     lw ra,   CTX_OFS_MEPC(sp)
     lw gp,   CTX_OFS_GP(sp)
     lw tp,   CTX_OFS_TP(sp)
@@ -152,7 +150,7 @@ irq_entry:
     lw t5,   CTX_OFS_T5(sp)
     lw t6,   CTX_OFS_T6(sp)
 
-    /* Restore q0 from the shared resume-PC slot before retirq. */
+    /* Restore q0 from the shared RA slot before retirq. */
     lw t0,   CTX_OFS_RA(sp)
     picorv32_setq_insn(q0, t0)
 

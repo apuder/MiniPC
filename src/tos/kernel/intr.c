@@ -25,6 +25,7 @@ void isr_timer()
 
     if (p && p->state == STATE_INTR_BLOCKED) {
         add_ready_queue(p);
+        interrupt_table[TIMER_IRQ] = NULL;
     }
 
     /* Always select the next runnable process after a timer tick. */

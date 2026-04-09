@@ -1,8 +1,10 @@
 #include <kernel.h>
 
+//#define TRAIN
 
 /* TOS_IFDEF shell */
 /* TOS_IFDEF train */
+#ifdef TRAIN
 void run_train_app(int window_id)
 {
     static int      already_run = 0;
@@ -15,6 +17,7 @@ void run_train_app(int window_id)
     already_run = 1;
     init_train();
 }
+#endif
 /* TOS_ENDIF train */
 
 void shell_print_process_heading(int window_id)
@@ -140,6 +143,7 @@ void process_command(int window_id, char *command)
     }
 
     /* TOS_IFDEF train */
+#ifdef TRAIN
     if (is_command(command, "train")) {
         run_train_app(window_id);
         return;
@@ -159,6 +163,7 @@ void process_command(int window_id, char *command)
         set_train_speed("D");
         return;
     }
+#endif
     /* TOS_ENDIF train */
 
     if (is_command(command, "help")) {
@@ -171,10 +176,13 @@ void process_command(int window_id, char *command)
         wm_print(window_id, "  - top    continuously show processes\n");
         wm_print(window_id, "  - pong   start PONG\n");
         /* TOS_IFDEF train */
+#ifdef TRAIN
         wm_print(window_id, "  - go     make the train go\n");
         wm_print(window_id, "  - stop   make the train stop\n");
         wm_print(window_id, "  - rev    reverse train direction\n");
-        wm_print(window_id, "  - train  start train application\n\n");
+        wm_print(window_id, "  - train  start train application\n");
+#endif
+        wm_print(window_id, "\n");
         /* TOS_ENDIF train */
         return;
     }
