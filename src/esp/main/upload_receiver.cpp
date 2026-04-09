@@ -7,20 +7,47 @@
 #include <cstring>
 #include <string>
 
+
 static const char *TAG = "upload_receiver";
 static size_t g_total = 0;
 static Programmer* programmer = nullptr;
+static FILE* sd_file = nullptr;
 static bool is_sram = false;
+static bool is_sdcard = false;
 
 extern "C" bool upload_receiver_init(const char *target, const char *filename_hint)
 {
     g_total = 0;
     is_sram = false;
-    
+    is_sdcard = false;
+
     ESP_LOGI(TAG, "upload receiver init: target=%s filename_hint=%s", 
              target ? target : "(null)", filename_hint ? filename_hint : "(none)");
     
     evt_signal(EVT_UPLOAD_START);
+
+    // Process SD card upload first
+    is_sdcard = (target && strcmp(target, "sdcard") == 0);
+    if (is_sdcard) {
+        if (!filename_hint) {
+            ESP_LOGE(TAG, "No filename_hint provided");
+            return false;
+        }
+
+        size_t filename_length = strlen("/sdcard/") + strlen(filename_hint) + 1;
+        char sdcard_filename[filename_length] = "/sdcard/";
+        strncat(sdcard_filename, filename_hint, filename_length);
+
+        sd_file = fopen(sdcard_filename, "wb");
+        if (sd_file == nullptr) {
+            ESP_LOGE(TAG, "Failed to open SDcard output file: filename=%s", sdcard_filename);
+            return false;
+        } 
+        else {
+            ESP_LOGI(TAG, "SDcard output file opened: filename=%s", sdcard_filename);
+            return true;
+        }
+    }
 
     ProgrammerJTAG* jtag_programmer = new ProgrammerJTAG();
 
@@ -65,6 +92,14 @@ extern "C" bool upload_receiver_init(const char *target, const char *filename_hi
 
 extern "C" size_t upload_receiver_write(const uint8_t *buf, size_t len)
 {
+    // Handle SD card upload first
+    if (is_sdcard) {
+        size_t written = fwrite((void*)buf, 1, len, sd_file);
+        g_total += written;
+        ESP_LOGI(TAG, "wrote %zu bytes to SDcard (total: %u)", len, (unsigned)g_total);
+        return written;
+    }
+
     // If FPGA mode is active, write directly to FPGA
     if (programmer->write_chunk(buf, len)) {
         g_total += len;
@@ -82,6 +117,17 @@ extern "C" void upload_receiver_finish(bool success)
              success ? 1 : 0, (unsigned) g_total);
     
     evt_signal(success ? EVT_UPLOAD_SUCCESS : EVT_UPLOAD_FAIL);
+
+    // Handle SD card upload first
+    if (is_sdcard) {
+        if (sd_file) {
+            fclose(sd_file);
+            sd_file = nullptr;
+            ESP_LOGI(TAG, "SDcard output file closed");
+        }
+
+        return;
+    }
 
     // If FPGA mode, end the programming
     if (programmer != nullptr) {

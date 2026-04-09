@@ -155,6 +155,7 @@
 							<select id="storeSelect" aria-label="Choose target">
 								<option value="flash">Flash</option>
 								<option value="sram" selected>SRAM</option>
+								<option value="sdcard">SD Card</option>
 							</select>
 						</div>
 					</div>
@@ -420,12 +421,9 @@
 				uploadResult.textContent = '';
 				filesList.innerHTML = '';
 
-				const form = new FormData();
-				form.append('file', file, file.name);
-				form.append('target', store.value);
-
 				const xhr = new XMLHttpRequest();
-				xhr.open('POST', '/upload?target=' + encodeURIComponent(store.value));
+				xhr.open('POST', '/upload?target=' + encodeURIComponent(store.value) + 
+					'&name=' + encodeURIComponent(file.name));
 				xhr.upload.addEventListener('progress', (ev)=>{
 					if(ev.lengthComputable){
 						const pct = Math.round(ev.loaded / ev.total * 100);
@@ -448,7 +446,7 @@
 						setTimeout(()=>{ uploadProgressWrap.style.display = 'none'; }, 1200);
 					}
 				};
-				xhr.send(form);
+				xhr.send(file);
 			}
 
 			connectSerialSocket();
