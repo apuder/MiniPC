@@ -10,7 +10,7 @@ OBJDUMP = riscv64-unknown-elf-objdump
 COMMONFLAGS = -march=rv32i2p0 -mabi=ilp32 -mno-relax
 CC = riscv64-unknown-elf-gcc
 CFLAGS = -mno-save-restore $(COMMONFLAGS) -nostartfiles -nostdlib -static -O1 -I../include
-CFLAGS += -msmall-data-limit=0
+CFLAGS += -msmall-data-limit=8
 CFLAGS += -Wl,--no-relax
 
 AS = riscv64-unknown-elf-as
