@@ -3,12 +3,22 @@
 
 #include <kernel.h>
 
-int             sbrk_ptr = SBRK_BEGIN;
+#include <uart.h>
+
+static unsigned char* sbrk_ptr = SBRK_BEGIN;
+
+static inline size_t align_up(size_t value, size_t alignment)
+{
+    return (value + alignment - 1) & ~(alignment - 1);
+}
 
 void           *sbrk(size_t size)
 {
+    if (size > 0) {
+        size = align_up(size, sizeof(void *));
+    }
     assert(sbrk_ptr + size < SBRK_END);
-    int             tmp = sbrk_ptr;
+    unsigned char* tmp = sbrk_ptr;
     sbrk_ptr += size;
     return (void *) tmp;
 }

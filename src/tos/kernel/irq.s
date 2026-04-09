@@ -58,12 +58,13 @@ irq_entry:
      * preserved. Store q0 in the RA slot and stash the real ra in the MEPC
      * slot so both paths can restore correctly.
      */
+    /* Save t0 now, before picorv32_getq_insn overwrites it with q0. */
+    sw t0,   CTX_OFS_T0(sp)
     picorv32_getq_insn(t0, q0)
-    sw t0,   CTX_OFS_RA(sp)
+    sw t0,   CTX_OFS_RA(sp)    /* interrupted PC → resume-address slot */
     sw gp,   CTX_OFS_GP(sp)
     sw tp,   CTX_OFS_TP(sp)
 
-    sw t0,   CTX_OFS_T0(sp)
     sw t1,   CTX_OFS_T1(sp)
     sw t2,   CTX_OFS_T2(sp)
     sw s0,   CTX_OFS_S0(sp)

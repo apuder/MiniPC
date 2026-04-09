@@ -158,12 +158,7 @@ PORT create_process(void (*ptr_to_new_proc) (PROCESS, PARAM),
 
     add_ready_queue(new_proc);
 
-    /* TOS_IFDEF assn5 */
     return new_port;
-    /* TOS_ELSE */
-    return NULL;
-    /* TOS_ENDIF assn5 */
-    /* TOS_ENDIF assn3 */
 }
 
 
