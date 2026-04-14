@@ -268,14 +268,15 @@ void __attribute__ ((naked)) resign()
         /*
          * Restore context of selected process.
          *
-         * The shared context convention is that CTX_OFS_RA always contains
-         * the address where execution should resume. For voluntary resign()
-         * switches, that is the caller's return address. For IRQ-saved
-         * contexts, irq.s writes the interrupted PC into that same slot.
-         * This lets us finish with a plain 'ret' without clobbering any
-         * restored general-purpose register just to hold a jump target.
+         * CRITICAL FIX for IRQ-interrupted contexts:
+         * - CTX_OFS_RA holds the resume PC (for both IRQ and resign contexts)
+         * - CTX_OFS_MEPC holds the saved architectural RA register value
+         *
+         * We restore RA from CTX_OFS_MEPC so that functions can return
+         * correctly. We resume execution by jumping to the resume PC
+         * saved in CTX_OFS_RA, using t2 as a temporary register.
          */
-        "lw ra,   " STR(CTX_OFS_RA)      "(sp)      \n"
+        "lw ra,   " STR(CTX_OFS_MEPC)    "(sp)      \n"
         "lw gp,   " STR(CTX_OFS_GP)      "(sp)      \n"
         "lw tp,   " STR(CTX_OFS_TP)      "(sp)      \n"
         "lw t0,   " STR(CTX_OFS_T0)      "(sp)      \n"
@@ -311,11 +312,24 @@ void __attribute__ ((naked)) resign()
         "mv a0, t0                                 \n"
         " .word 0x0605650b                         \n"
         "lw a0,   " STR(CTX_OFS_A0)      "(sp)      \n"
+
+        /*
+         * Resume without clobbering any restored GPR:
+         * - load resume PC from CTX_OFS_RA
+         * - stage it in scratch Q2
+         * - copy it into Q0 (retirq PC source)
+         * - restore t0 from its saved value
+         * - return via retirq
+         */
+        "lw t0,   " STR(CTX_OFS_RA)      "(sp)      \n"
+        " .word 0x0202a10b                         \n" /* setq q2, t0 */
+        " .word 0x0202a00b                         \n" /* setq q0, t0 */
         "lw t0,   " STR(CTX_OFS_T0)      "(sp)      \n"
 
         "addi sp, sp, " STR(CONTEXT_FRAME_SIZE)     "\n"
-        "ret                                        \n"
+        " .word 0x0400000b                         \n" /* retirq */
         ::: "memory");
+    /* TOS_ENDIF assn4 */
     /* TOS_ENDIF assn4 */
 }
 

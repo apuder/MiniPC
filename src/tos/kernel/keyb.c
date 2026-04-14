@@ -6,11 +6,19 @@ PORT            keyb_port;
 #define KEYBD           0x60
 #define PORT_B          0x61
 #define KBIT            0x80
+#define UART_DATA_MMIO  ((volatile unsigned char *) 0x8000000c)
 #define MAXSIZE         1024
+#if 0
 #define UP_ARROW	1
 #define LEFT_ARROW	2
 #define RIGHT_ARROW	3
 #define DOWN_ARROW	4
+#else
+#define UP_ARROW	'2'
+#define LEFT_ARROW	'4'
+#define RIGHT_ARROW	'6'
+#define DOWN_ARROW	'8'
+#endif
 
 #if 0
 /* Variables indicating scancodes */
@@ -299,14 +307,14 @@ void keyb_notifier(PROCESS self, PARAM param)
 void keyb_notifier(PROCESS self, PARAM param)
 {
     Keyb_Message    msg;
+    char            keyb_notifier_byte;
 
- #if 0
     while (1) {
-        wait_for_interrupt(KEYB_IRQ);
-        msg.key_buffer = (char *) &new_key;
+        wait_for_interrupt(UART_IRQ);
+        keyb_notifier_byte = *UART_DATA_MMIO;
+        msg.key_buffer = &keyb_notifier_byte;
         message(keyb_port, &msg);
     }
- #endif
     become_zombie();
 }
 

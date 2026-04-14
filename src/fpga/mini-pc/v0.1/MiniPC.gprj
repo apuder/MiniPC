@@ -6,6 +6,7 @@
     <Device name="GW2A-18C" pn="GW2A-LV18PG256C8/I7">gw2a18c-011</Device>
     <FileList>
         <File path="src/countdown_timer.v" type="file.verilog" enable="1"/>
+        <File path="src/debug.v" type="file.verilog" enable="1"/>
         <File path="src/display.v" type="file.verilog" enable="1"/>
         <File path="src/esp.v" type="file.verilog" enable="1"/>
         <File path="src/force_rebuild.v" type="file.verilog" enable="1"/>

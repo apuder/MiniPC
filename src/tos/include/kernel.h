@@ -1115,8 +1115,8 @@ void init_idt_entry (int intr_no, void (*isr) (void));
 /* TOS_IFDEF never */
 /*!
 \brief Causes a process to wait until the specified interrupt occurs.
-\details The process calling this function will become #STATE_INTR_BLOCKED until the interrupt identified by intr_no occurs.  When that interrupt occurs, the process is added back to the ready queue.  A process can wait for only one interrupt at a time, and only one process can be waiting for a particular interrupt.  The only valid values for intr_no are #TIMER_IRQ, #KEYB_IRQ and #COM1_IRQ, corresponding to the timer, keyboard, and COM1 interrupts respectively.  Each of these values is indicated by a #define preprocessor directive in kernel.h.
-\sa TIMER_IRQ, KEYB_IRQ, COM1_IRQ, init_interrupts(), init_idt_entry()
+\details The process calling this function will become #STATE_INTR_BLOCKED until the interrupt identified by intr_no occurs.  When that interrupt occurs, the process is added back to the ready queue.  A process can wait for only one interrupt at a time, and only one process can be waiting for a particular interrupt.  The valid values for intr_no are #TIMER_IRQ and #UART_IRQ, corresponding to the timer and UART receive interrupts respectively.
+\sa TIMER_IRQ, UART_IRQ, init_interrupts(), init_idt_entry()
 */
 /* TOS_ENDIF never */
 void wait_for_interrupt (int intr_no);
@@ -1140,6 +1140,14 @@ void init_interrupts ();
 */
 /* TOS_ENDIF never */
 #define TIMER_IRQ   7
+
+/* TOS_IFDEF never */
+/*!
+\brief The number associated with a UART receive interrupt.
+\details External interrupts are represented as bits in the PicoRV32 IRQ bitmap input. UART receive-ready uses index 8.
+*/
+/* TOS_ENDIF never */
+#define UART_IRQ    8
 
 /* TOS_IFDEF never */
 /*!

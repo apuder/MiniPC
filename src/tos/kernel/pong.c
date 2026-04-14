@@ -67,7 +67,7 @@ void pong_process(PROCESS self, PARAM param)
     wm_print(window_id, "\n  PONG\n\n");
     wm_print(window_id, "  Keys:\n    'q' for up\n    'a' for down\n\n");
     wm_print(window_id, "  Hit any key to start... ");
-    //keyb_get_keystroke(window_id, TRUE);
+    keyb_get_keystroke(window_id, TRUE);
     wm_set_cursor(window_id, 0, 0, 0);
 
     while (1) {

@@ -41,21 +41,22 @@
 .set PCB_OFS_ESP, 12
 
 /*
- * Timer IRQ entry:
+ * IRQ entry:
  * 1) Save full context of interrupted process to its PCB context frame.
- * 2) Call isr_timer(), which updates active_proc via dispatcher().
+ * 2) Call isr_handle_pending(q1_pending), which handles all pending IRQs
+ *    and updates active_proc via dispatcher().
  * 3) Restore context from active_proc and return with retirq.
  */
 irq_entry:
     addi sp, sp, -CONTEXT_FRAME_SIZE
 
     /*
-     * Keep the shared context format compatible with resign(): the RA slot
-     * always contains the architectural ra register value.
-     *
-     * For an IRQ-saved context, the interrupted resume PC comes from q0, so
-     * store q0 in the MEPC slot. This lets retirq resume correctly while a
-     * later resign()-based restore still sees a valid ra value in RA.
+     * Keep the shared context format compatible with resign():
+     * - CTX_OFS_RA stores the resume PC.
+     *   For an IRQ frame this is q0 (interrupted PC), so resign() can later
+     *   restore ra from CTX_OFS_RA and return via plain 'ret'.
+     * - CTX_OFS_MEPC stores the architectural ra register value.
+     *   IRQ return itself is driven by q0/retirq, not by this slot.
      */
     /* Save t0 now, before picorv32_getq_insn overwrites it with q0. */
     sw t0,   CTX_OFS_T0(sp)
@@ -113,14 +114,18 @@ irq_entry:
     .option pop
 #endif
 
-    call isr_timer
+    picorv32_getq_insn(a0, q1)
+    call isr_handle_pending
 
     /* sp = active_proc->esp */
     la t0, active_proc
     lw t1, 0(t0)
     lw sp, PCB_OFS_ESP(t1)
 
-    /* Restore context of selected process. */
+    /*
+     * Restore context of selected process.
+     * CTX_OFS_MEPC holds the saved architectural ra value.
+     */
     lw ra,   CTX_OFS_MEPC(sp)
     lw gp,   CTX_OFS_GP(sp)
     lw tp,   CTX_OFS_TP(sp)
@@ -150,11 +155,11 @@ irq_entry:
     lw t5,   CTX_OFS_T5(sp)
     lw t6,   CTX_OFS_T6(sp)
 
-    /* Restore q0 from the shared RA slot before retirq. */
+    /* Restore IRQ return PC (q0) from the shared resume-PC slot. */
     lw t0,   CTX_OFS_RA(sp)
     picorv32_setq_insn(q0, t0)
 
-    /* Restore per-process IRQ mask before returning from IRQ. */
+    /* Restore per-process IRQ mask (stored in CTX_OFS_MSTATUS). */
     lw a0,   CTX_OFS_MSTATUS(sp)
     picorv32_maskirq_insn(a0, a0)
     lw a0,   CTX_OFS_A0(sp)
@@ -168,7 +173,7 @@ irq_entry:
      * PicoRV32 custom IRQ return (retirq), encoded as a raw word because
      * standard assemblers do not recognize this non-RISC-V mnemonic.
      *
-     * Conceptually this exits the core's IRQ-active state and resumes at the
-     * IRQ return PC held in x3 (gp here), unlike standard RISC-V mret.
+     * On this path, q0 is restored from CTX_OFS_RA just above and used as the
+     * resume PC for IRQ return.
      */
     picorv32_retirq_insn()

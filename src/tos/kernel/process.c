@@ -48,7 +48,8 @@ extern unsigned __stack_top;
 #define CTX_OFS_MEPC            124U
 
 #define IRQ_MASK_ALL_DISABLED   (~0u)
-#define IRQ_MASK_TIMER_ENABLED  0xFFFFFF7Fu
+#define IRQ_MASK_TIMER_UART_ENABLED  (~((1u << TIMER_IRQ) | (1u << UART_IRQ)))
+//#define IRQ_MASK_TIMER_UART_ENABLED  (~((1u << UART_IRQ)))
 
 /*
  * Bootstrap for a freshly-created process context.
@@ -111,14 +112,17 @@ PORT create_process(void (*ptr_to_new_proc) (PROCESS, PARAM),
     asm volatile ("mv %0, gp":"=r"(gp));
 
     if (interrupts_initialized) {
-        initial_irq_mask = (LONG)IRQ_MASK_TIMER_ENABLED;
+        initial_irq_mask = (LONG)IRQ_MASK_TIMER_UART_ENABLED;
     } else {
         initial_irq_mask = (LONG)IRQ_MASK_ALL_DISABLED;
     }
 
     /*
-     * Build a full register context on the stack. The layout matches resign()
-     * and already reserves mstatus/mepc slots for a future ISR-based switch.
+     * Build a full register context on the stack. The layout matches the
+     * shared resign()/IRQ frame convention:
+     * - CTX_OFS_RA contains the resume PC.
+     * - CTX_OFS_MSTATUS contains the per-process IRQ mask.
+     * - CTX_OFS_MEPC contains a saved architectural ra value.
      */
     poke_l(esp + CTX_OFS_RA, (LONG) process_bootstrap);
     poke_l(esp + CTX_OFS_GP, (LONG) gp);

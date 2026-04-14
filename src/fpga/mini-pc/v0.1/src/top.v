@@ -57,6 +57,7 @@ module top (
             output ESP_REQ,
             input ESP_DONE,
 
+            output [6:0] PROBE,
 `ifdef USE_LA
             output wire       clk_out,
             output wire       mem_instr, 
@@ -86,8 +87,10 @@ module top (
   parameter ENABLE_IRQ_QREGS = 1;
 
   // 18.2065 Hz legacy timer tick target (used as machine timer interrupt source).
-  localparam integer MTIMER_TARGET_HZ_NUM = 1;
-  localparam integer MTIMER_TARGET_HZ_DEN = 5;
+  localparam integer MTIMER_TARGET_HZ_NUM = 3;
+  localparam integer MTIMER_TARGET_HZ_DEN = 1;
+  localparam integer TIMER_IRQ_BIT = 7;
+  localparam integer UART_IRQ_BIT = 8;
   //localparam integer MTIMER_TARGET_HZ_NUM = 182065;
   //localparam integer MTIMER_TARGET_HZ_DEN = 10000;
   localparam integer MTIMER_DIV = (CLK_FREQ * MTIMER_TARGET_HZ_DEN + (MTIMER_TARGET_HZ_NUM / 2)) / MTIMER_TARGET_HZ_NUM;
@@ -136,6 +139,7 @@ module top (
    reg                        psram_chip_present;
   reg [MTIMER_DIV_WIDTH-1:0] mtimer_div_ctr;
   reg                        mtimer_irq_pulse;
+  wire                       uart_rx_irq_pulse;
   wire [31:0]                cpu_irq;
 
 `ifdef USE_LA
@@ -153,7 +157,8 @@ module top (
 
 wire clk;
 
-assign cpu_irq = mtimer_irq_pulse ? 32'h0000_0080 : 32'h0000_0000;
+assign cpu_irq = ({32{mtimer_irq_pulse}} & (32'h1 << TIMER_IRQ_BIT)) |
+                 ({32{uart_rx_irq_pulse}} & (32'h1 << UART_IRQ_BIT));
 
 always @(posedge clk) begin
   if (!reset_n) begin
@@ -407,7 +412,8 @@ end
       .uart_wstrb(mem_wstrb),
       .uart_di(mem_wdata),
       .uart_do(uart_data_o),
-      .uart_ready(uart_ready)
+      .uart_ready(uart_ready),
+      .uart_rx_ready_pulse(uart_rx_irq_pulse)
       );
 
    countdown_timer cdt

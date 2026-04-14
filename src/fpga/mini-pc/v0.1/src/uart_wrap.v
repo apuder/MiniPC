@@ -9,7 +9,8 @@ module uart_wrap
    input wire [3:0]   uart_wstrb,
    input wire [31:0]  uart_di,
    output wire [31:0] uart_do,
-   output wire        uart_ready
+   output wire        uart_ready,
+   output wire        uart_rx_ready_pulse
    );
 
    wire               div_sel;
@@ -37,7 +38,8 @@ module uart_wrap
       .reg_dat_re(dat_sel && !uart_wstrb),
       .reg_dat_di(uart_di),
       .reg_dat_do(dat_do),
-      .reg_dat_wait(dat_wait)
+      .reg_dat_wait(dat_wait),
+      .rx_ready_pulse(uart_rx_ready_pulse)
       );
 
 endmodule

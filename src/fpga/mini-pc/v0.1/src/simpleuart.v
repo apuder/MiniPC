@@ -32,7 +32,8 @@ module simpleuart #(parameter integer DEFAULT_DIV = 1) (
 	input         reg_dat_re,
 	input  [31:0] reg_dat_di,
 	output [31:0] reg_dat_do,
-	output        reg_dat_wait
+	output        reg_dat_wait,
+	output        rx_ready_pulse
 );
 	reg [31:0] cfg_divider;
 
@@ -41,6 +42,7 @@ module simpleuart #(parameter integer DEFAULT_DIV = 1) (
 	reg [7:0] recv_pattern;
 	reg [7:0] recv_buf_data;
 	reg recv_buf_valid;
+	reg rx_ready_pulse_q;
 
 	reg [9:0] send_pattern;
 	reg [3:0] send_bitcnt;
@@ -51,6 +53,7 @@ module simpleuart #(parameter integer DEFAULT_DIV = 1) (
 
 	assign reg_dat_wait = reg_dat_we && (send_bitcnt || send_dummy);
 	assign reg_dat_do = recv_buf_valid ? recv_buf_data : ~0;
+	assign rx_ready_pulse = rx_ready_pulse_q;
 
 	always @(posedge clk) begin
 		if (!resetn) begin
@@ -70,7 +73,9 @@ module simpleuart #(parameter integer DEFAULT_DIV = 1) (
 			recv_pattern <= 0;
 			recv_buf_data <= 0;
 			recv_buf_valid <= 0;
+			rx_ready_pulse_q <= 0;
 		end else begin
+			rx_ready_pulse_q <= 0;
 			recv_divcnt <= recv_divcnt + 1;
 			if (reg_dat_re)
 				recv_buf_valid <= 0;
@@ -90,6 +95,7 @@ module simpleuart #(parameter integer DEFAULT_DIV = 1) (
 					if (recv_divcnt > cfg_divider) begin
 						recv_buf_data <= recv_pattern;
 						recv_buf_valid <= 1;
+						rx_ready_pulse_q <= 1;
 						recv_state <= 0;
 					end
 				end

@@ -5,30 +5,52 @@ BOOL interrupts_initialized = FALSE;
 static PROCESS interrupt_table[MAX_INTERRUPTS];
 
 /*
- * Unmask only external IRQ bit 7 (machine timer source in this system)
+ * Unmask supported external IRQ sources.
  * using PicoRV32's custom maskirq instruction.
  */
-static void unmask_timer_irq(void)
+static void unmask_supported_irqs(void)
 {
-    register unsigned irq_mask asm("a0") = 0xFFFFFF7Fu;
+    register unsigned irq_mask asm("a0") =
+        ~((1u << TIMER_IRQ) | (1u << UART_IRQ));
     /* 0x0605000b encodes PicoRV32 custom maskirq rs1=a0, rd=x0: write new IRQ mask from a0, discard old mask. */
     asm volatile(".word 0x0605000b" : "+r"(irq_mask) :: "memory");
+}
+
+static inline void wake_waiting_process(int intr_no)
+{
+    PROCESS p = interrupt_table[intr_no];
+
+    if (p && p->state == STATE_INTR_BLOCKED) {
+        add_ready_queue(p);
+        interrupt_table[intr_no] = NULL;
+    }
 }
 
 /*
  * Timer ISR entrypoint.
  * Platform trap glue should call this when machine timer IRQ is raised.
  */
-void isr_timer()
+static inline void isr_timer()
 {
-    PROCESS p = interrupt_table[TIMER_IRQ];
+    wake_waiting_process(TIMER_IRQ);
+}
 
-    if (p && p->state == STATE_INTR_BLOCKED) {
-        add_ready_queue(p);
-        interrupt_table[TIMER_IRQ] = NULL;
+static inline void isr_uart()
+{
+    wake_waiting_process(UART_IRQ);
+}
+
+void isr_handle_pending(unsigned int pending_irqs)
+{
+    if (pending_irqs & (1u << TIMER_IRQ)) {
+        isr_timer();
     }
 
-    /* Always select the next runnable process after a timer tick. */
+    if (pending_irqs & (1u << UART_IRQ)) {
+        isr_uart();
+    }
+
+    /* Always select the next runnable process after handling an IRQ. */
     active_proc = dispatcher();
 }
 
@@ -36,8 +58,8 @@ void wait_for_interrupt(int intr_no)
 {
     volatile int flag;
 
-    if (intr_no != TIMER_IRQ) {
-        panic("wait_for_interrupt(): only TIMER_IRQ is supported");
+    if (intr_no != TIMER_IRQ && intr_no != UART_IRQ) {
+        panic("wait_for_interrupt(): only TIMER_IRQ and UART_IRQ are supported");
     }
 
     DISABLE_INTR(flag);
@@ -61,6 +83,6 @@ void init_interrupts()
         interrupt_table[i] = NULL;
     }
 
-    unmask_timer_irq();
+    unmask_supported_irqs();
     interrupts_initialized = TRUE;
 }

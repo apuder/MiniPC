@@ -8,13 +8,15 @@ OBJDUMP = riscv64-unknown-elf-objdump
 
 # Options for the RISC cross compiler
 COMMONFLAGS = -march=rv32i2p0 -mabi=ilp32 -mno-relax
+DBGFLAGS_C = -g3 -gdwarf-4
+DBGFLAGS_AS = -g
 CC = riscv64-unknown-elf-gcc
-CFLAGS = -mno-save-restore $(COMMONFLAGS) -nostartfiles -nostdlib -static -O1 -I../include
+CFLAGS = -mno-save-restore $(COMMONFLAGS) $(DBGFLAGS_C) -nostartfiles -nostdlib -static -O1 -I../include
 CFLAGS += -msmall-data-limit=8
 CFLAGS += -Wl,--no-relax
 
 AS = riscv64-unknown-elf-as
-ASFLAGS = $(COMMONFLAGS)
+ASFLAGS = $(COMMONFLAGS) $(DBGFLAGS_AS)
 
 AR = riscv64-unknown-elf-ar
 
