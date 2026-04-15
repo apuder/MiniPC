@@ -73,7 +73,7 @@ void shell_top(int window_id)
     while (keyb_get_keystroke(window_id, FALSE) == 0) {
         wm_clear(window_id);
         shell_ps(window_id);
-        sleep(100);
+        sleep(10);
     }
 }
 

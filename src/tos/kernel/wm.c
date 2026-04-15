@@ -64,6 +64,7 @@ typedef struct __WM {
                     cursor_y;
     char            cursor_char;
     char           *buffer;
+    char           *visibility;
     struct __WM    *next;
 } WM;
 
@@ -119,6 +120,49 @@ void poke_screen_buffer(int x, int y, char ch)
     screen_buffer[y * 80 + x] = ch;
 }
 
+void poke_screen_direct(int x, int y, char ch)
+{
+    if (x < 0 || y < 0)
+        return;
+    if (x >= 80 || y >= 24)
+        return;
+    int             pos = y * 80 + x;
+    screen_buffer[pos] = ch;
+    ((char *) 0x50000000)[pos] = ch;
+}
+
+BOOL is_window_cell_visible(WM * window, int x, int y)
+{
+    if (x < 0 || y < 0)
+        return FALSE;
+    if (x >= window->width || y >= window->height)
+        return FALSE;
+    return window->visibility[y * window->width + x] != 0;
+}
+
+void redraw_window_content_direct(WM * window)
+{
+    int             i = 0;
+    for (int y = 0; y < window->height; y++) {
+        for (int x = 0; x < window->width; x++) {
+            if (window->visibility[i] != 0) {
+                poke_screen_direct(window->x + x, window->y + y,
+                                   window->buffer[i]);
+            }
+            i++;
+        }
+    }
+    if (window->cursor_char != 0 &&
+        is_window_cell_visible(window, window->cursor_x, window->cursor_y)) {
+        int             pos =
+            window->cursor_x + window->cursor_y * window->width;
+        window->buffer[pos] = 0;
+        poke_screen_direct(window->x + window->cursor_x,
+                           window->y + window->cursor_y,
+                           window->cursor_char);
+    }
+}
+
 void draw_window_frame(WM * window, BOOL is_top)
 {
     int             frame_x = window->x - 1;
@@ -158,11 +202,15 @@ void draw_window_content(WM * window)
     int             i = 0;
     for (int y = 0; y < window->height; y++) {
         for (int x = 0; x < window->width; x++) {
-            poke_screen_buffer(window->x + x, window->y + y,
-                               window->buffer[i++]);
+            if (window->visibility[i] != 0) {
+                poke_screen_buffer(window->x + x, window->y + y,
+                                   window->buffer[i]);
+            }
+            i++;
         }
     }
-    if (window->cursor_char != 0) {
+    if (window->cursor_char != 0 &&
+        is_window_cell_visible(window, window->cursor_x, window->cursor_y)) {
         int             pos =
             window->cursor_x + window->cursor_y * window->width;
         window->buffer[pos] = 0;
@@ -170,6 +218,53 @@ void draw_window_content(WM * window)
                            window->y + window->cursor_y,
                            window->cursor_char);
     }
+}
+
+void compute_window_visibility()
+{
+    WM             *window = window_tail;
+
+    if (window == NULL) {
+        return;
+    }
+
+    WM             *owner[80 * 24];
+    k_memset(owner, 0, sizeof(owner));
+
+    // First pass: determine top-most owner for each screen cell.
+    // Frames also occlude underlying windows, so include the full frame box.
+    do {
+        window = window->next;
+        int             size = window->width * window->height;
+        k_memset(window->visibility, 0, size);
+        for (int y = -1; y <= window->height; y++) {
+            int             gy = window->y + y;
+            for (int x = -1; x <= window->width; x++) {
+                int             gx = window->x + x;
+                if (gx >= 0 && gx < 80 && gy >= 0 && gy < 24) {
+                    owner[gy * 80 + gx] = window;
+                }
+            }
+        }
+    } while (window != window_tail);
+
+    // Second pass: mark visible cells for each window.
+    window = window_tail;
+    do {
+        window = window->next;
+        int             i = 0;
+        for (int y = 0; y < window->height; y++) {
+            int             gy = window->y + y;
+            for (int x = 0; x < window->width; x++) {
+                int             gx = window->x + x;
+                if (gx >= 0 && gx < 80 && gy >= 0 && gy < 24 &&
+                    owner[gy * 80 + gx] == window) {
+                    window->visibility[i] = 1;
+                }
+                i++;
+            }
+        }
+    } while (window != window_tail);
 }
 
 void draw_window(WM * window)
@@ -184,6 +279,7 @@ void redraw_screen()
     WM             *window = window_tail;
     clear_screen_buffer();
     if (window != NULL) {
+        compute_window_visibility();
         do {
             window = window->next;
             draw_window(window);
@@ -206,7 +302,9 @@ void wm_create_impl(WM_MSG_CREATE * msg)
     window->cursor_char = DEFAULT_CURSOR_CHAR;
     int             size = msg->width * msg->height;
     window->buffer = (char *) malloc(size);
+    window->visibility = (char *) malloc(size);
     k_memset(window->buffer, 0, size);
+    k_memset(window->visibility, 0, size);
     if (window_tail == NULL) {
         window->next = window;
     } else {
@@ -242,10 +340,14 @@ void scroll_wm(WM * window)
     for (int i = 0; i < window->width; i++) {
         window->buffer[to++] = 0;
     }
+    redraw_window_content_direct(window);
 }
 
 void wm_print_char(WM * window, char ch)
 {
+    int             old_cursor_x = window->cursor_x;
+    int             old_cursor_y = window->cursor_y;
+
     if (ch == '\n') {
         window->cursor_x = 0;
         window->cursor_y++;
@@ -276,6 +378,31 @@ void wm_print_char(WM * window, char ch)
     if (window->cursor_y == window->height) {
         window->cursor_y--;
         scroll_wm(window);
+        return;
+    }
+
+    if (old_cursor_x >= 0 && old_cursor_x < window->width &&
+        old_cursor_y >= 0 && old_cursor_y < window->height) {
+        int             old_pos = old_cursor_x + old_cursor_y * window->width;
+        if (is_window_cell_visible(window, old_cursor_x, old_cursor_y)) {
+            poke_screen_direct(window->x + old_cursor_x,
+                               window->y + old_cursor_y,
+                               window->buffer[old_pos]);
+        }
+    }
+
+    if (window->cursor_x >= 0 && window->cursor_x < window->width &&
+        window->cursor_y >= 0 && window->cursor_y < window->height) {
+        int             pos =
+            window->cursor_x + window->cursor_y * window->width;
+        window->buffer[pos] = 0;
+        if (window->cursor_char != 0 &&
+            is_window_cell_visible(window, window->cursor_x,
+                                   window->cursor_y)) {
+            poke_screen_direct(window->x + window->cursor_x,
+                               window->y + window->cursor_y,
+                               window->cursor_char);
+        }
     }
 }
 
@@ -287,7 +414,6 @@ void wm_print_impl(WM_MSG_PRINT * msg)
         wm_print_char(window, *str);
         str++;
     }
-    redraw_screen();
 }
 
 void wm_control_impl(WM_MSG_CONTROL * msg)

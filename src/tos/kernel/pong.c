@@ -5,7 +5,7 @@
 #define PONG_WINDOW_HEIGHT 10
 
 #define PONG_RACKET_HEIGHT 3
-#define PONG_RACKET_CHAR 191
+#define PONG_RACKET_CHAR 177
 
 #define PONG_BALL_CHAR 140
 
@@ -39,12 +39,12 @@ void show_game_over(int window_id, char *buffer)
     int             x = (PONG_WINDOW_WIDTH - k_strlen(msg)) / 2;
     int             y = PONG_WINDOW_HEIGHT / 2;
     for (int i = 0; i < 10; i++) {
-        sleep(10);
+        sleep(3);
         clear_buffer(buffer);
         wm_set_cursor(window_id, x, y, 0);
         wm_print(window_id, msg);
         wm_redraw_window(window_id);
-        sleep(10);
+        sleep(3);
         fill_buffer(buffer);
         wm_set_cursor(window_id, x, y, 0);
         wm_print(window_id, msg);
