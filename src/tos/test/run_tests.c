@@ -36,8 +36,8 @@ function_pointer tests[] =  {
     test_isr_3,
 #if 0
     test_timer_1,
-    test_com_1,
 #endif
+    test_com_1,
     //test_fork_1,
     NULL
 };

@@ -10,8 +10,8 @@ static PROCESS interrupt_table[MAX_INTERRUPTS];
  */
 static void unmask_supported_irqs(void)
 {
-    register unsigned irq_mask asm("a0") =
-        ~((1u << TIMER_IRQ) | (1u << UART_IRQ));
+    register unsigned irq_mask asm("a0") = IRQ_MASK_ALL_ENABLED;
+
     /* 0x0605000b encodes PicoRV32 custom maskirq rs1=a0, rd=x0: write new IRQ mask from a0, discard old mask. */
     asm volatile(".word 0x0605000b" : "+r"(irq_mask) :: "memory");
 }
@@ -40,6 +40,11 @@ static inline void isr_uart()
     wake_waiting_process(UART_IRQ);
 }
 
+static inline void isr_uart2()
+{
+    wake_waiting_process(UART2_IRQ);
+}
+
 void isr_handle_pending(unsigned int pending_irqs)
 {
     if (pending_irqs & (1u << TIMER_IRQ)) {
@@ -50,6 +55,10 @@ void isr_handle_pending(unsigned int pending_irqs)
         isr_uart();
     }
 
+    if (pending_irqs & (1u << UART2_IRQ)) {
+        isr_uart2();
+    }
+
     /* Always select the next runnable process after handling an IRQ. */
     active_proc = dispatcher();
 }
@@ -58,8 +67,8 @@ void wait_for_interrupt(int intr_no)
 {
     volatile int flag;
 
-    if (intr_no != TIMER_IRQ && intr_no != UART_IRQ) {
-        panic("wait_for_interrupt(): only TIMER_IRQ and UART_IRQ are supported");
+    if (intr_no != TIMER_IRQ && intr_no != UART_IRQ && intr_no != UART2_IRQ) {
+        panic("wait_for_interrupt(): only TIMER_IRQ, UART_IRQ, and UART2_IRQ are supported");
     }
 
     DISABLE_INTR(flag);

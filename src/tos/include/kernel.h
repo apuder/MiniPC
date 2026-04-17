@@ -103,6 +103,8 @@ Everything else is provided for you, and it is recommended that you look around 
 #include <assert.h>
 #include <stdarg.h>
 
+#define CLK_FREQ 84000000
+
 #define TRUE   1
 #define FALSE  0
 
@@ -343,6 +345,8 @@ supports such lists and enables this function to act accordingly to each format 
 /* TOS_ENDIF never */
 int k_vsprintf(char *buf, const char *fmt, va_list argp);
 #define vsprintf k_vsprintf
+int k_sprintf(char *buf, const char *fmt, ...);
+#define sprintf k_sprintf
 
 /* TOS_IFDEF never */
 /*! 
@@ -1148,6 +1152,17 @@ void init_interrupts ();
 */
 /* TOS_ENDIF never */
 #define UART_IRQ    8
+
+/* TOS_IFDEF never */
+/*!
+\brief The number associated with a second UART receive interrupt.
+\details External interrupts are represented as bits in the PicoRV32 IRQ bitmap input. UART2 receive-ready uses index 9.
+*/
+/* TOS_ENDIF never */
+#define UART2_IRQ   9
+
+#define IRQ_MASK_ALL_DISABLED   (~0u)
+#define IRQ_MASK_ALL_ENABLED  (~((1u << TIMER_IRQ) | (1u << UART_IRQ) | (1u << UART2_IRQ)))
 
 /* TOS_IFDEF never */
 /*!

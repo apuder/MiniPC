@@ -17,9 +17,6 @@
 
 void test_com_1()
 {
-    kprintf("======== test_com_1 ========");
-    kprintf("You need to run 'loopback.pyw' before you run this test.");
-
     char buffer[13];
    /* uses 12 char for "Hello World!" and an extra char '\0'
       to indicate the end of the string */
@@ -33,6 +30,9 @@ void test_com_1()
     init_timer();
     init_com();
     
+    kprintf("======== test_com_1 ========\n");
+    kprintf("You need to run 'loopback.pyw' before you run this test.\n\n");
+
     print_all_processes(kernel_window);
     kprintf("\n");
     

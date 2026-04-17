@@ -5,10 +5,16 @@
 #define UART_H
 
 extern void uart_set_div(unsigned int div);
+extern void uart_set_stop_bits(unsigned int stop_bits);
+extern void uart2_set_div(unsigned int div);
+extern void uart2_set_stop_bits(unsigned int stop_bits);
 extern void uart_print_hex(unsigned int val);
 extern char uart_getchar(void);
+extern char uart2_getchar(void);
 extern void uart_putchar(char ch);
+extern void uart2_putchar(char ch);
 extern void uart_puts(char *s);
+extern void uart2_puts(char *s);
 extern unsigned int uart_get_hex(void);
 
 #endif

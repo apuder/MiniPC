@@ -57,6 +57,7 @@ module top (
             output ESP_REQ,
             input ESP_DONE,
 
+            inout [7:0] PMOD,
             output [6:0] PROBE,
 `ifdef USE_LA
             output wire       clk_out,
@@ -91,6 +92,7 @@ module top (
   localparam integer MTIMER_TARGET_HZ_DEN = 1;
   localparam integer TIMER_IRQ_BIT = 7;
   localparam integer UART_IRQ_BIT = 8;
+  localparam integer UART2_IRQ_BIT = 9;
   //localparam integer MTIMER_TARGET_HZ_NUM = 182065;
   //localparam integer MTIMER_TARGET_HZ_DEN = 10000;
   localparam integer MTIMER_DIV = (CLK_FREQ * MTIMER_TARGET_HZ_DEN + (MTIMER_TARGET_HZ_NUM / 2)) / MTIMER_TARGET_HZ_NUM;
@@ -124,6 +126,9 @@ module top (
    wire                       uart_sel;
    wire [31:0]                uart_data_o;
    wire                       uart_ready;
+   wire                       uart2_sel;
+   wire [31:0]                uart2_data_o;
+   wire                       uart2_ready;
    wire                       ws2812b_sel;
    wire                       ws2812b_ready;
    wire                       dsp_sel;
@@ -140,6 +145,7 @@ module top (
   reg [MTIMER_DIV_WIDTH-1:0] mtimer_div_ctr;
   reg                        mtimer_irq_pulse;
   wire                       uart_rx_irq_pulse;
+  wire                       uart2_rx_irq_pulse;
   wire [31:0]                cpu_irq;
 
 `ifdef USE_LA
@@ -158,7 +164,8 @@ module top (
 wire clk;
 
 assign cpu_irq = ({32{mtimer_irq_pulse}} & (32'h1 << TIMER_IRQ_BIT)) |
-                 ({32{uart_rx_irq_pulse}} & (32'h1 << UART_IRQ_BIT));
+                 ({32{uart_rx_irq_pulse}} & (32'h1 << UART_IRQ_BIT)) |
+                 ({32{uart2_rx_irq_pulse}} & (32'h1 << UART2_IRQ_BIT));
 
 always @(posedge clk) begin
   if (!reset_n) begin
@@ -281,6 +288,7 @@ end
    //      SRAM 00000000 - 0001ffff
    //      LED  80000000
    //      UART 80000008 - 8000000f
+   //     UART2 80000030 - 8000003f
    //      CDT  80000010 - 80000014
    //   WS2812B 80000020 - 80000024
    //      DSP  50000000 - 500007ff  (2K display BRAM)
@@ -289,6 +297,7 @@ end
    assign sram_sel = mem_valid && (mem_addr < MEMBYTES);
    assign leds_sel = mem_valid && (mem_addr == 32'h80000000);
    assign uart_sel = mem_valid && ((mem_addr & 32'hfffffff8) == 32'h80000008);
+   assign uart2_sel = mem_valid && ((mem_addr & 32'hfffffff0) == 32'h80000030);
    assign cdt_sel = mem_valid && (mem_addr == 32'h80000010);
    assign ws2812b_sel = mem_valid && (mem_addr == 32'h80000020);
    assign dsp_sel = mem_valid && (mem_addr >= DSP_BASE) && (mem_addr < (DSP_BASE + DSP_SIZE));
@@ -302,6 +311,7 @@ end
                (sram_sel    & sram_ready)  |
                (leds_sel    & leds_ready)  |
                (uart_sel    & uart_ready)  |
+               (uart2_sel   & uart2_ready) |
                (cdt_sel     & cdt_ready)   |
                (ws2812b_sel & ws2812b_ready) |
                (dsp_sel     & dsp_ready)   |
@@ -316,9 +326,17 @@ end
                       dsp_sel     ? dsp_data_o  :
                       leds_sel    ? leds_data_o :
                       uart_sel    ? uart_data_o :
+                      uart2_sel   ? uart2_data_o :
                       cdt_sel     ? cdt_data_o  :
                       spi_sel     ? spi_data_o  :
                       esp_sel     ? esp_data_o  : 32'h0;
+
+wire uart2_rx;
+wire uart2_tx;
+
+assign PMOD[4] = uart2_tx;
+assign uart2_rx = PMOD[5];
+assign PMOD[5] = 1'bz;
 
 wire status;
 
@@ -414,6 +432,21 @@ end
       .uart_do(uart_data_o),
       .uart_ready(uart_ready),
       .uart_rx_ready_pulse(uart_rx_irq_pulse)
+      );
+
+   uart_wrap uart2
+     (
+      .clk(clk),
+      .reset_n(reset_n),
+      .uart_tx(uart2_tx),
+      .uart_rx(uart2_rx),
+      .uart_sel(uart2_sel),
+      .addr(mem_addr[3:0]),
+      .uart_wstrb(mem_wstrb),
+      .uart_di(mem_wdata),
+      .uart_do(uart2_data_o),
+      .uart_ready(uart2_ready),
+      .uart_rx_ready_pulse(uart2_rx_irq_pulse)
       );
 
    countdown_timer cdt

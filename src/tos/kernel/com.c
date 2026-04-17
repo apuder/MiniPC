@@ -9,25 +9,15 @@
 
 
 #include <kernel.h>
+#include <uart.h>
 
 PORT            com_port;
 
 
 void init_uart()
 {
-    /* LineControl disabled to set baud rate */
-    outportb(COM1_PORT + 3, 0x80);
-    /* lower byte of baud rate */
-    outportb(COM1_PORT + 0, 0x30);
-    /* upper byte of baud rate */
-    outportb(COM1_PORT + 1, 0x00);
-    /* 8 Bits, No Parity, 2 stop bits */
-    outportb(COM1_PORT + 3, 0x07);
-    /* Interrupt enable */
-    outportb(COM1_PORT + 1, 1);
-    /* Modem control */
-    outportb(COM1_PORT + 4, 0x0b);
-    inportb(COM1_PORT);
+    uart2_set_div(CLK_FREQ / 2400.0 + 0.5);
+    uart2_set_stop_bits(2);
 }
 
 
@@ -45,8 +35,8 @@ void com_reader_process(PROCESS self, PARAM param)
         msg = (COM_Message *) receive(&sender_proc);
         i = 0;
         while (i != msg->len_input_buffer) {
-            wait_for_interrupt(COM1_IRQ);
-            msg->input_buffer[i++] = inportb(COM1_PORT);
+            wait_for_interrupt(UART2_IRQ);
+            msg->input_buffer[i++] = uart2_getchar();
         }
         message(reply_port, &msg);
     }
@@ -57,11 +47,7 @@ void com_reader_process(PROCESS self, PARAM param)
 void send_cmd_to_com(char *cmd)
 {
     while (*cmd != '\0') {
-        /* 
-         * Wait for the UART to accept the next byte
-         */
-        while (!(inportb(COM1_PORT + 5) & (1 << 5)));
-        outportb(COM1_PORT, *cmd);
+        uart2_putchar(*cmd);
         cmd++;
     }
 }

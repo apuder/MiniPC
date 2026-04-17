@@ -412,6 +412,18 @@ int k_vsprintf(char *buf, const char *fmt, va_list argp)
 
 
 
+int k_sprintf(char *buf, const char *fmt, ...)
+{
+    va_list         argp;
+    int             ret;
+
+    va_start(argp, fmt);
+    ret = k_vsprintf(buf, fmt, argp);
+    va_end(argp);
+    return ret;
+}
+
+
 void wprintf(WINDOW * wnd, const char *fmt, ...)
 {
     va_list         argp;

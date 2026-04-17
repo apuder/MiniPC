@@ -5,6 +5,10 @@
 
 #define UART_DIV ((volatile unsigned int *) 0x80000008)
 #define UART_DATA ((volatile unsigned char *) 0x8000000c)
+#define UART_STOP_BITS ((volatile unsigned char *) 0x8000000f)
+#define UART2_DIV ((volatile unsigned int *) 0x80000030)
+#define UART2_DATA ((volatile unsigned char *) 0x80000034)
+#define UART2_STOP_BITS ((volatile unsigned char *) 0x8000003f)
 
 void uart_set_div(unsigned int div)
 {
@@ -14,6 +18,32 @@ void uart_set_div(unsigned int div)
 
   /* Need to delay a little */
   for (delay = 0; delay < 200; delay++) {}
+}
+
+void uart_set_stop_bits(unsigned int stop_bits)
+{
+  if (stop_bits <= 1)
+    *UART_STOP_BITS = 0;
+  else
+    *UART_STOP_BITS = 1;
+}
+
+void uart2_set_div(unsigned int div)
+{
+  volatile int delay;
+
+  *UART2_DIV = div;
+
+  /* Need to delay a little */
+  for (delay = 0; delay < 200; delay++) {}
+}
+
+void uart2_set_stop_bits(unsigned int stop_bits)
+{
+  if (stop_bits <= 1)
+    *UART2_STOP_BITS = 0;
+  else
+    *UART2_STOP_BITS = 1;
 }
 
 void uart_print_hex(unsigned int val)
@@ -38,14 +68,34 @@ char uart_getchar(void)
   return(ch);
 }
 
+char uart2_getchar(void)
+{
+  unsigned char ch;
+
+  /* UART gives 0xff when empty */
+  while ((ch = *UART2_DATA) == 0xff) {}
+
+  return(ch);
+}
+
 void uart_putchar(char ch)
 {
   *UART_DATA = ch;
+}
+
+void uart2_putchar(char ch)
+{
+  *UART2_DATA = ch;
 }
   
 void uart_puts(char *s)
 {
   while (*s != 0) *UART_DATA = *s++;
+}
+
+void uart2_puts(char *s)
+{
+  while (*s != 0) *UART2_DATA = *s++;
 }
 
 unsigned int uart_get_hex(void)

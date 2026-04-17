@@ -11,7 +11,6 @@
 /* TOS_ENDIF vga */
 #endif
 
-#define CLK_FREQ 84000000
 
 void kernel_main()
 {
@@ -24,7 +23,7 @@ void kernel_main()
     init_interrupts();
     init_null_process();
     init_timer();
-    //init_com();
+    init_com();
 
     init_wm();
     init_keyb();

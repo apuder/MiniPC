@@ -1,10 +1,50 @@
 #include <kernel.h>
 
-//#define TRAIN
 
 /* TOS_IFDEF shell */
 /* TOS_IFDEF train */
-#ifdef TRAIN
+
+
+void train_set_switch(int number, char direction)
+{
+    COM_Message     msg;
+    char            full_command[20];
+
+    k_sprintf(full_command, "M%d%c\015", number, direction);
+    msg.output_buffer = full_command;
+    msg.len_input_buffer = 0;
+    msg.input_buffer = NULL;
+    send(com_port, &msg);
+}
+
+int train_probe(int number)
+{
+    COM_Message     msg;
+    char            full_command[20];
+    char            response[20];
+
+    k_sprintf(full_command, "R\015");
+    msg.output_buffer = full_command;
+    msg.len_input_buffer = 0;
+    msg.input_buffer = NULL;
+    send(com_port, &msg);
+    k_sprintf(full_command, "C%d\015", number);
+    msg.output_buffer = full_command;
+    msg.len_input_buffer = 3;
+    msg.input_buffer = response;
+    send(com_port, &msg);
+    if (response[0] != '*' || response[2] != '\015') {
+        return -1;
+    }
+    if (response[1] == '0') {
+        return 0;
+    } else if (response[1] == '1') {
+        return 1;
+    }
+    return -1;
+}
+
+#if 0
 void run_train_app(int window_id)
 {
     static int      already_run = 0;
@@ -112,7 +152,32 @@ int is_command(char *s1, char *s2)
         s1++;
         s2++;
     }
-    return *s1 == '\0';
+    return *s2 == '\0' && (*s1 == '\0' || *s1 == ' ');
+}
+
+static char *skip_spaces(char *s)
+{
+    while (*s == ' ')
+        s++;
+    return s;
+}
+
+static char *skip_word(char *s)
+{
+    while (*s && *s != ' ')
+        s++;
+    return skip_spaces(s);
+}
+
+static char *parse_int(char *s, int *out)
+{
+    int val = 0;
+    while (*s >= '0' && *s <= '9') {
+        val = val * 10 + (*s - '0');
+        s++;
+    }
+    *out = val;
+    return s;
 }
 
 void process_command(int window_id, char *command)
@@ -143,12 +208,49 @@ void process_command(int window_id, char *command)
     }
 
     /* TOS_IFDEF train */
-#ifdef TRAIN
     if (is_command(command, "train")) {
-        run_train_app(window_id);
+        char *args = skip_word(command);
+        if (*args == '\0') {
+            wm_print(window_id, "Running train app not yet supported.\n");
+            //run_train_app(window_id);
+        } else if (is_command(args, "switch")) {
+            char *p = skip_word(args);
+            int num = 0;
+            p = parse_int(p, &num);
+            p = skip_spaces(p);
+            char dir = (*p == 'G' || *p == 'R') ? *p : '\0';
+            if (dir == '\0') {
+                wm_print(window_id, "Usage: train switch <number> G|R\n");
+            } else {
+                train_set_switch(num, dir);
+            }
+        } else if (is_command(args, "probe")) {
+            char *p = skip_word(args);
+            int num = 0;
+            p = parse_int(p, &num);
+            p = skip_spaces(p);
+            if (*p != '\0') {
+                wm_print(window_id, "Usage: train probe <number>\n");
+            } else {
+                switch (train_probe(num)) {
+                    case -1:
+                        wm_print(window_id, "Error probing track %d\n", num);
+                        break;
+                    case 0:
+                        wm_print(window_id, "Track %d is clear\n", num);
+                        break;
+                    case 1:
+                        wm_print(window_id, "Track %d is occupied\n", num);
+                        break;
+                }
+            }
+        } else {
+            wm_print(window_id, "Usage: train [switch|probe]\n");
+        }
         return;
     }
 
+#if 0
     if (is_command(command, "go")) {
         set_train_speed("4");
         return;
@@ -176,12 +278,13 @@ void process_command(int window_id, char *command)
         wm_print(window_id, "  - top    continuously show processes\n");
         wm_print(window_id, "  - pong   start PONG\n");
         /* TOS_IFDEF train */
-#ifdef TRAIN
+#if 0
         wm_print(window_id, "  - go     make the train go\n");
         wm_print(window_id, "  - stop   make the train stop\n");
         wm_print(window_id, "  - rev    reverse train direction\n");
-        wm_print(window_id, "  - train  start train application\n");
 #endif
+        wm_print(window_id, "  - train  start train application\n");
+        wm_print(window_id, "  - train switch <n> G|R  set switch\n");
         wm_print(window_id, "\n");
         /* TOS_ENDIF train */
         return;
