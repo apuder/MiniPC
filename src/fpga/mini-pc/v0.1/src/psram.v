@@ -26,7 +26,8 @@
 module aps6404l_picorv32 #
 (
     parameter int unsigned SYS_HZ       = 84_000_000,
-    parameter int unsigned SCLK_HZ      = 4_500_000,
+    parameter int unsigned SCLK_INIT_HZ = 4_500_000,
+    parameter int unsigned SCLK_RUN_HZ  = 9_000_000,
     parameter int unsigned RD_WAIT_CLKS = 6,              // dummy "quad-nibble" cycles after addr for 0xEB
     parameter logic [31:0] PSRAM_BASE   = 32'h4000_0000,
     parameter logic [31:0] PSRAM_SIZE   = 32'h0080_0000   // 8MB
@@ -80,18 +81,32 @@ end
 
     // --------------------------
     // SCLK generator (SPI mode 0: CPOL=0, CPHA=0)
+    // - Use low speed during reset/ID/quad-enable sequencing.
+    // - Switch to run speed only after successful init and QPI entry.
     // --------------------------
-    localparam int unsigned DIV = (SYS_HZ/(2*SCLK_HZ));
-    logic [$clog2(DIV)-1:0] divcnt;
+    localparam int unsigned DIV_INIT_RAW = (SCLK_INIT_HZ == 0) ? 1 : (SYS_HZ/(2*SCLK_INIT_HZ));
+    localparam int unsigned DIV_RUN_RAW  = (SCLK_RUN_HZ  == 0) ? 1 : (SYS_HZ/(2*SCLK_RUN_HZ));
+    localparam int unsigned DIV_INIT     = (DIV_INIT_RAW < 1) ? 1 : DIV_INIT_RAW;
+    localparam int unsigned DIV_RUN      = (DIV_RUN_RAW  < 1) ? 1 : DIV_RUN_RAW;
+    localparam int unsigned DIV_MAX      = (DIV_INIT > DIV_RUN) ? DIV_INIT : DIV_RUN;
+    localparam int unsigned DIV_CNT_W    = $clog2((DIV_MAX < 2) ? 2 : DIV_MAX);
+
+    logic [DIV_CNT_W-1:0] divcnt;
+    logic [DIV_CNT_W-1:0] div_target;
     logic sclk_en;
     logic sclk_int;
+    logic sclk_fast_mode;
+
+    always_comb begin
+        div_target = sclk_fast_mode ? DIV_RUN[DIV_CNT_W-1:0] : DIV_INIT[DIV_CNT_W-1:0];
+    end
 
     always_ff @(posedge clk) begin
         if (rst) begin
             divcnt   <= '0;
             sclk_int <= 1'b0;
         end else if (sclk_en && !sh_tx_req && !sh_rx_req) begin
-            if (divcnt == DIV-1) begin
+            if (divcnt == (div_target - 1'b1)) begin
                 divcnt   <= '0;
                 sclk_int <= ~sclk_int;
             end else begin
@@ -293,8 +308,13 @@ end
     // --------------------------
     typedef enum logic [5:0] {
         ST_POR,
-        ST_RSTEN_CMD, ST_RSTEN_WAIT, ST_RSTEN_GAP,
-        ST_RST_CMD, ST_RST_WAIT, ST_POST_RST_GAP,
+        ST_SPI_RSTEN_CMD, ST_SPI_RSTEN_WAIT, ST_RSTEN_GAP,
+        ST_SPI_RST_CMD, ST_SPI_RST_WAIT,
+        ST_QPI_RSTEN_CMD, ST_QPI_RSTEN_WAIT,
+        ST_QPI_RST_CMD, ST_QPI_RST_WAIT,
+        ST_QPI_POST_RST_WAIT,
+        ST_QPI_EXIT_WAIT,
+        ST_POST_RST_GAP,
         ST_ENTER_QUAD_CMD, ST_ENTER_QUAD_WAIT, ST_ENTER_QUAD,
         ST_READID_CMD, ST_READID_WAIT, ST_READID_A2, ST_READID_A1, ST_READID_A0, ST_READID_RX_DELAY, ST_READID_MFG, ST_READID_KGD,
         ST_IDLE,
@@ -321,6 +341,10 @@ end
     // power-on delay (~200us default)
     localparam int unsigned POR_TICKS = (SYS_HZ/5000);
     logic [$clog2(POR_TICKS+1)-1:0] por_cnt;
+
+    // reset recovery delay after RST command sequence (~100us default)
+    localparam int unsigned RESET_WAIT_TICKS = (SYS_HZ/10000);
+    logic [$clog2(RESET_WAIT_TICKS+1)-1:0] reset_wait_cnt;
 
     // latched CPU request
     logic [22:0] addr_l;
@@ -409,9 +433,11 @@ end
                mfg_id    <= 8'h00;
                kgd_id    <= 8'h00;
                     qpi_mode  <= 1'b0;
+               sclk_fast_mode <= 1'b0;
                psram_chip_present <= 1'b0;
                 id_timeout <= 24'h000000;
                 gap_cnt    <= 4'd0;
+            reset_wait_cnt <= '0;
         end else begin
 
             // Default: clear shifter kick pulses each cycle; states will raise them when needed
@@ -433,51 +459,109 @@ end
 
                     if (por_cnt == POR_TICKS) begin
                         por_cnt <= '0;
-                        // Start reset-enable command - assert CE#, load data, but don't enable SCLK yet
+                        // Start QPI-form reset-enable first for warm-reset recovery.
                         ps_ce_n <= 1'b0;
-                        sh_start_tx(8'h66, W_X1); // RSTEN
-                        st <= ST_RSTEN_CMD;
+                        sh_start_tx(8'h66, W_X4); // RSTEN (QPI-form)
+                        st <= ST_QPI_RSTEN_CMD;
                     end else begin
                         por_cnt <= por_cnt + 1;
                     end
                 end
 
-                ST_RSTEN_CMD: begin
-                    // Wait one cycle for shifter to load data
-                    st <= ST_RSTEN_WAIT;
+                ST_QPI_RSTEN_CMD: begin
+                    st <= ST_QPI_RSTEN_WAIT;
                 end
 
-                ST_RSTEN_WAIT: begin
-                    // Now shifter is active with data loaded, enable SCLK
+                ST_QPI_RSTEN_WAIT: begin
                     sclk_en <= 1'b1;
                     if (sh_done_pulse) begin
-                        // Immediately follow with 0x99 while CS# stays low
-                        //sclk_en <= 1'b0;
-                        sh_start_tx(8'h99, W_X1); // RST
-                        st <= ST_RST_CMD;
+                        sh_start_tx(8'h99, W_X4);
+                        st <= ST_QPI_RST_CMD;
                     end
                 end
 
-                ST_RST_CMD: begin
-                    // One-cycle launch/load state for 0x99 (RST)
-                    st <= ST_RST_WAIT;
+                ST_QPI_RST_CMD: begin
+                    st <= ST_QPI_RST_WAIT;
                 end
 
-                ST_RST_WAIT: begin
-                    // Run the 0x99 byte
+                ST_QPI_RST_WAIT: begin
                     sclk_en <= 1'b1;
                     if (sh_done_pulse) begin
-                        // After reset command completes, deassert CE# and insert a small gap
+                        // End contiguous QPI RSTEN/RST transaction and wait tRST.
+                        ps_ce_n        <= 1'b1;
+                        sclk_en        <= 1'b0;
+                        reset_wait_cnt <= RESET_WAIT_TICKS[$clog2(RESET_WAIT_TICKS+1)-1:0];
+                        st <= ST_QPI_POST_RST_WAIT;
+                    end
+                end
+
+                ST_QPI_POST_RST_WAIT: begin
+                    if (reset_wait_cnt != 0) begin
+                        reset_wait_cnt <= reset_wait_cnt - 1;
+                    end else begin
+                        // After reset wait, send explicit QPI exit as its own transaction.
+                        ps_ce_n <= 1'b0;
+                        sh_start_tx(8'hF5, W_X4);
+                        st <= ST_QPI_EXIT_WAIT;
+                    end
+                end
+
+                ST_QPI_EXIT_WAIT: begin
+                    sclk_en <= 1'b1;
+                    if (sh_done_pulse) begin
+                        // Insert CS# high gap before SPI-form reset sequence.
                         ps_ce_n    <= 1'b1;
                         sclk_en    <= 1'b0;
                         gap_cnt    <= 4'd8; // small CS# high gap (~8 clk cycles)
+                        st <= ST_RSTEN_GAP;
+                    end
+                end
+
+                ST_RSTEN_GAP: begin
+                    if (gap_cnt != 0) begin
+                        gap_cnt <= gap_cnt - 1;
+                    end else begin
+                        // Always end recovery with SPI-form reset so READ ID starts from SPI.
+                        ps_ce_n <= 1'b0;
+                        sh_start_tx(8'h66, W_X1);
+                        st <= ST_SPI_RSTEN_CMD;
+                    end
+                end
+
+                ST_SPI_RSTEN_CMD: begin
+                    // Wait one cycle for shifter to load data
+                    st <= ST_SPI_RSTEN_WAIT;
+                end
+
+                ST_SPI_RSTEN_WAIT: begin
+                    // Now shifter is active with data loaded, enable SCLK
+                    sclk_en <= 1'b1;
+                    if (sh_done_pulse) begin
+                        // Immediately follow with 0x99 while CS# stays low (SPI)
+                        sh_start_tx(8'h99, W_X1); // RST
+                        st <= ST_SPI_RST_CMD;
+                    end
+                end
+
+                ST_SPI_RST_CMD: begin
+                    // One-cycle launch/load state for 0x99 (RST)
+                    st <= ST_SPI_RST_WAIT;
+                end
+
+                ST_SPI_RST_WAIT: begin
+                    // Run the 0x99 byte, then wait tRST before probing ID.
+                    sclk_en <= 1'b1;
+                    if (sh_done_pulse) begin
+                        ps_ce_n         <= 1'b1;
+                        sclk_en         <= 1'b0;
+                        reset_wait_cnt  <= RESET_WAIT_TICKS[$clog2(RESET_WAIT_TICKS+1)-1:0];
                         st <= ST_POST_RST_GAP;
                     end
                 end
 
                 ST_POST_RST_GAP: begin
-                    if (gap_cnt != 0) begin
-                        gap_cnt <= gap_cnt - 1;
+                    if (reset_wait_cnt != 0) begin
+                        reset_wait_cnt <= reset_wait_cnt - 1;
                     end else begin
                         st <= ST_READID_CMD;
                     end
@@ -504,6 +588,7 @@ end
                     sclk_en    <= 1'b0;
                     sio_oe_fsm <= 4'b0000;
                     qpi_mode   <= 1'b1;
+                    sclk_fast_mode <= 1'b1;
                     st         <= ST_IDLE;
                 end
 
@@ -513,6 +598,7 @@ end
                     ps_ce_n     <= 1'b0;
                     id_timeout  <= 24'h000000; // reset timeout
                     qpi_mode    <= 1'b0;  // still in SPI during ID probe
+                    sclk_fast_mode <= 1'b0;
                     sh_start_tx(8'h9F, W_X1); // Read ID opcode (SPI)
                     st <= ST_READID_WAIT;
                 end
@@ -565,10 +651,8 @@ end
 
                 // Optional dummy state retained but bypassed
                 ST_READID_MFG: begin
-                    $display("[CTRL] ST_READID_MFG: psram_sel=%b, rx_done_pulse=%b, id_timeout=%0d, time=%0t", psram_sel, rx_done_pulse, id_timeout, $time);
                     sclk_en <= 1'b1;  // KEEP SCLK RUNNING while waiting for response
                     if (rx_done_pulse) begin
-                        $display("[CTRL]   -> rx_done_pulse: got mfg_id=0x%02x, moving to KGD", rx_byte);
                         mfg_id <= rx_byte;
                         sh_start_rx(W_X1); // KGD (Known Good Die) or continuation byte
                         st <= ST_READID_KGD;
