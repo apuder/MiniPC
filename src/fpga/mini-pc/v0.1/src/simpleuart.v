@@ -52,6 +52,8 @@ module simpleuart #(
 	reg recv_buf_valid;
 	reg rx_ready_pulse_q;
 	reg [1:0] recv_stopcnt;
+	reg ser_rx_sync_0;
+	reg ser_rx_sync_1;
 
 	reg [9:0] send_pattern;
 	reg [3:0] send_bitcnt;
@@ -64,6 +66,7 @@ module simpleuart #(
 	assign reg_dat_wait = reg_dat_we && (send_bitcnt || send_dummy);
 	assign reg_dat_do = recv_buf_valid ? recv_buf_data : ~0;
 	assign rx_ready_pulse = rx_ready_pulse_q;
+	wire ser_rx_sync = ser_rx_sync_1;
 
 	always @(posedge clk) begin
 		if (!resetn) begin
@@ -103,6 +106,16 @@ module simpleuart #(
 
 	always @(posedge clk) begin
 		if (!resetn) begin
+			ser_rx_sync_0 <= 1'b1;
+			ser_rx_sync_1 <= 1'b1;
+		end else begin
+			ser_rx_sync_0 <= ser_rx;
+			ser_rx_sync_1 <= ser_rx_sync_0;
+		end
+	end
+
+	always @(posedge clk) begin
+		if (!resetn) begin
 			recv_state <= 0;
 			recv_divcnt <= 0;
 			recv_pattern <= 0;
@@ -117,7 +130,7 @@ module simpleuart #(
 				recv_buf_valid <= 0;
 			case (recv_state)
 				0: begin
-					if (!ser_rx)
+					if (!ser_rx_sync)
 						recv_state <= 1;
 					recv_divcnt <= 0;
 				end
@@ -130,7 +143,7 @@ module simpleuart #(
 				10: begin
 					if (recv_divcnt > cfg_divider) begin
 						recv_divcnt <= 0;
-						if (!ser_rx) begin
+						if (!ser_rx_sync) begin
 							recv_state <= 0;
 						end else if (recv_stopcnt > 1) begin
 							recv_stopcnt <= recv_stopcnt - 1;
@@ -144,7 +157,7 @@ module simpleuart #(
 				end
 				default: begin
 					if (recv_divcnt > cfg_divider) begin
-						recv_pattern <= {ser_rx, recv_pattern[7:1]};
+						recv_pattern <= {ser_rx_sync, recv_pattern[7:1]};
 						if (recv_state == 9) begin
 							recv_state <= 10;
 							recv_stopcnt <= cfg_stop_bits;
