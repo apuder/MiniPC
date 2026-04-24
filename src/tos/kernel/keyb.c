@@ -7,18 +7,13 @@ PORT            keyb_port;
 #define PORT_B          0x61
 #define KBIT            0x80
 #define UART_DATA_MMIO  ((volatile unsigned char *) 0x8000000c)
+#define KEYB_DATA_MMIO  ((volatile unsigned char *) 0x80000040)
 #define MAXSIZE         1024
-#if 0
-#define UP_ARROW	1
-#define LEFT_ARROW	2
-#define RIGHT_ARROW	3
-#define DOWN_ARROW	4
-#else
-#define UP_ARROW	'2'
-#define LEFT_ARROW	'4'
-#define RIGHT_ARROW	'6'
-#define DOWN_ARROW	'8'
-#endif
+
+#define UP_ARROW	    0x11
+#define DOWN_ARROW	    0x12
+#define LEFT_ARROW	    0x13
+#define RIGHT_ARROW	    0x14
 
 #if 0
 /* Variables indicating scancodes */
@@ -310,6 +305,20 @@ void keyb_notifier(PROCESS self, PARAM param)
     char            keyb_notifier_byte;
 
     while (1) {
+        wait_for_interrupt(KEYB_IRQ);
+        keyb_notifier_byte = *KEYB_DATA_MMIO;
+        msg.key_buffer = &keyb_notifier_byte;
+        message(keyb_port, &msg);
+    }
+    become_zombie();
+}
+
+void uart_notifier(PROCESS self, PARAM param)
+{
+    Keyb_Message    msg;
+    char            keyb_notifier_byte;
+
+    while (1) {
         wait_for_interrupt(UART_IRQ);
         keyb_notifier_byte = *UART_DATA_MMIO;
         msg.key_buffer = &keyb_notifier_byte;
@@ -418,14 +427,19 @@ void keyb_process(PROCESS self, PARAM param)
     PROCESS         sender_proc;
     PORT            keyb_notifier_port;
     PROCESS         keyb_notifier_proc;
+    PORT            uart_notifier_port;
+    PROCESS         uart_notifier_proc;
 
     keyb_notifier_port =
         create_process(keyb_notifier, 7, 0, "Keyboard Notifier");
     keyb_notifier_proc = keyb_notifier_port->owner;
+    uart_notifier_port =
+        create_process(uart_notifier, 7, 0, "UART Notifier");
+    uart_notifier_proc = uart_notifier_port->owner;
 
     while (1) {
         msg = (Keyb_Message *) receive(&sender_proc);
-        if (sender_proc == keyb_notifier_proc) {
+        if (sender_proc == keyb_notifier_proc || sender_proc == uart_notifier_proc) {
             /* the notifier has sent us a new keystroke */
             char            key = *msg->key_buffer;
             if (keyb_handle_control(key)) {

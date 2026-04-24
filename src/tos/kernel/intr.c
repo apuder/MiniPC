@@ -45,6 +45,11 @@ static inline void isr_uart2()
     wake_waiting_process(UART2_IRQ);
 }
 
+static inline void isr_keyb()
+{
+    wake_waiting_process(KEYB_IRQ);
+}
+
 void isr_handle_pending(unsigned int pending_irqs)
 {
     if (pending_irqs & (1u << TIMER_IRQ)) {
@@ -59,6 +64,10 @@ void isr_handle_pending(unsigned int pending_irqs)
         isr_uart2();
     }
 
+    if (pending_irqs & (1u << KEYB_IRQ)) {
+        isr_keyb();
+    }
+
     /* Always select the next runnable process after handling an IRQ. */
     active_proc = dispatcher();
 }
@@ -67,8 +76,8 @@ void wait_for_interrupt(int intr_no)
 {
     volatile int flag;
 
-    if (intr_no != TIMER_IRQ && intr_no != UART_IRQ && intr_no != UART2_IRQ) {
-        panic("wait_for_interrupt(): only TIMER_IRQ, UART_IRQ, and UART2_IRQ are supported");
+    if (intr_no != TIMER_IRQ && intr_no != UART_IRQ && intr_no != UART2_IRQ && intr_no != KEYB_IRQ) {
+        panic("wait_for_interrupt(): only TIMER_IRQ, UART_IRQ, UART2_IRQ, and KEYB_IRQ are supported");
     }
 
     DISABLE_INTR(flag);

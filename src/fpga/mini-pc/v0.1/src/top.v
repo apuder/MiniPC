@@ -42,6 +42,10 @@ module top (
             output logic        ps_sclk,
             inout  wire  [3:0]  ps_sio,
 
+            // PS/2
+            inout wire        ps2_clk,
+            inout wire        ps2_data,
+
             // HDMI
             output [2:0] HDMI_TX_P,
             output [2:0] HDMI_TX_N,
@@ -49,6 +53,7 @@ module top (
             output HDMI_TXC_N,
 
             input CS_FPGA,
+            output CS_SD,
             input SCK,
             input MOSI,
             output MISO,
@@ -93,6 +98,7 @@ module top (
   localparam integer TIMER_IRQ_BIT = 7;
   localparam integer UART_IRQ_BIT = 8;
   localparam integer UART2_IRQ_BIT = 9;
+  localparam integer PS2_IRQ_BIT = 10;
   //localparam integer MTIMER_TARGET_HZ_NUM = 182065;
   //localparam integer MTIMER_TARGET_HZ_DEN = 10000;
   localparam integer MTIMER_DIV = (CLK_FREQ * MTIMER_TARGET_HZ_DEN + (MTIMER_TARGET_HZ_NUM / 2)) / MTIMER_TARGET_HZ_NUM;
@@ -141,7 +147,11 @@ module top (
    wire                       esp_ready;
    wire [31:0]                esp_data_o;
    wire                       psram_sel;
-   reg                        psram_chip_present;
+  wire                       ps2_sel;
+  wire                       ps2_ready;
+  wire [31:0]                ps2_data_o;
+  wire                       ps2_irq_pulse;
+  reg                        psram_chip_present;
   reg [MTIMER_DIV_WIDTH-1:0] mtimer_div_ctr;
   reg                        mtimer_irq_pulse;
   wire                       uart_rx_irq_pulse;
@@ -165,7 +175,8 @@ wire clk;
 
 assign cpu_irq = ({32{mtimer_irq_pulse}} & (32'h1 << TIMER_IRQ_BIT)) |
                  ({32{uart_rx_irq_pulse}} & (32'h1 << UART_IRQ_BIT)) |
-                 ({32{uart2_rx_irq_pulse}} & (32'h1 << UART2_IRQ_BIT));
+                 ({32{uart2_rx_irq_pulse}} & (32'h1 << UART2_IRQ_BIT)) |
+                 ({32{ps2_irq_pulse}} & (32'h1 << PS2_IRQ_BIT));
 
 always @(posedge clk) begin
   if (!reset_n) begin
@@ -292,6 +303,7 @@ end
    //      CDT  80000010 - 80000014
    //   WS2812B 80000020 - 80000024
    //      DSP  50000000 - 500007ff  (2K display BRAM)
+  //       PS2  80000040
     //      SPI  80001000 - 800011ff
    //      ESP  80002000
    assign sram_sel = mem_valid && (mem_addr < MEMBYTES);
@@ -300,6 +312,7 @@ end
    assign uart2_sel = mem_valid && ((mem_addr & 32'hfffffff0) == 32'h80000030);
    assign cdt_sel = mem_valid && (mem_addr == 32'h80000010);
    assign ws2812b_sel = mem_valid && (mem_addr == 32'h80000020);
+   assign ps2_sel     = mem_valid && (mem_addr == 32'h80000040) && !(&mem_wstrb);
    assign dsp_sel = mem_valid && (mem_addr >= DSP_BASE) && (mem_addr < (DSP_BASE + DSP_SIZE));
    assign psram_sel = mem_valid && (mem_addr >= PSRAM_BASE) && (mem_addr < (PSRAM_BASE + PSRAM_SIZE));
    assign spi_sel = mem_valid && (mem_addr >= SPI_BASE) && (mem_addr < (SPI_BASE + SPI_SIZE));
@@ -316,7 +329,8 @@ end
                (ws2812b_sel & ws2812b_ready) |
                (dsp_sel     & dsp_ready)   |
                (spi_sel     & spi_ready)   |
-               (esp_sel     & esp_ready)
+               (esp_sel     & esp_ready)   |
+               (ps2_sel     & ps2_ready)
               );
 
 
@@ -329,7 +343,8 @@ end
                       uart2_sel   ? uart2_data_o :
                       cdt_sel     ? cdt_data_o  :
                       spi_sel     ? spi_data_o  :
-                      esp_sel     ? esp_data_o  : 32'h0;
+                      esp_sel     ? esp_data_o  :
+                      ps2_sel     ? ps2_data_o  : 32'h0;
 
 wire uart2_rx;
 wire uart2_tx;
@@ -337,6 +352,8 @@ wire uart2_tx;
 assign PMOD[4] = uart2_tx;
 assign uart2_rx = PMOD[5];
 assign PMOD[5] = 1'bz;
+
+assign CS_SD = 1'bz;
 
 wire status;
 
@@ -447,6 +464,18 @@ end
       .uart_do(uart2_data_o),
       .uart_ready(uart2_ready),
       .uart_rx_ready_pulse(uart2_rx_irq_pulse)
+      );
+
+   ps2 ps2_kbd
+     (
+      .clk(clk),
+      .reset_n(reset_n),
+      .ps2_clk(ps2_clk),
+      .ps2_data(ps2_data),
+      .ps2_sel(ps2_sel),
+      .ps2_do(ps2_data_o),
+      .ps2_ready(ps2_ready),
+      .ps_rx_ready_pulse(ps2_irq_pulse)
       );
 
    countdown_timer cdt

@@ -1161,8 +1161,16 @@ void init_interrupts ();
 /* TOS_ENDIF never */
 #define UART2_IRQ   9
 
+/* TOS_IFDEF never */
+/*!
+\brief The number associated with a PS/2 keyboard receive interrupt.
+\details External interrupts are represented as bits in the PicoRV32 IRQ bitmap input. PS/2 keyboard key-press uses index 10.
+*/
+/* TOS_ENDIF never */
+#define KEYB_IRQ   10
+
 #define IRQ_MASK_ALL_DISABLED   (~0u)
-#define IRQ_MASK_ALL_ENABLED  (~((1u << TIMER_IRQ) | (1u << UART_IRQ) | (1u << UART2_IRQ)))
+#define IRQ_MASK_ALL_ENABLED  (~((1u << TIMER_IRQ) | (1u << UART_IRQ) | (1u << UART2_IRQ) | (1u << KEYB_IRQ)))
 
 /* TOS_IFDEF never */
 /*!
@@ -1334,14 +1342,6 @@ void init_com();
 
 
 /*=====>>> keyb.c <<<====================================================*/
-
-/* TOS_IFDEF never */
-/*!
-\brief The number associated with a keyboard interrupt.
-\details In TOS the interrupt controller is re-programmed so that the timer interrupt is mapped to interrupt number 0x61.
-*/
-/* TOS_ENDIF never */
-#define KEYB_IRQ	0x61
 
 /* TOS_IFDEF never */
 /*!
